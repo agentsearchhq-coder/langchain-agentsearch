@@ -17,6 +17,7 @@ class ExtractInput(BaseModel):
     url: str = Field(description="http(s) URL to extract")
     formats: Optional[list[str]] = Field(default=None, description='e.g. ["markdown"]')
     max_chars: Optional[int] = Field(default=None, gt=0)
+    render_fallback: Optional[bool] = Field(default=None, description="If extract returns thin content, retry with render (extra $0.005)")
 
 
 class RenderInput(BaseModel):
@@ -61,7 +62,10 @@ class _PaidTool(BaseTool):
         try:
             if not c.has_wallet_key():
                 raise c.AgentSearchError(c.paid_only_message(self.name))
+            fb = kwargs.pop("render_fallback", None)
             body = {k: v for k, v in kwargs.items() if v is not None}
+            if self.op == "extract":
+                return c.dumps(c.extract_with_fallback(body, fb))
             return c.dumps(c.call_portal(self.op, body))
         except Exception as e:
             return _err(e)
@@ -69,13 +73,13 @@ class _PaidTool(BaseTool):
 
 class AgentSearchExtractTool(_PaidTool):
     name: str = "agentsearch_extract"
-    description: str = "Fetch a URL and return its main content as clean text/markdown. Paid: $0.005 per call (needs a wallet)."
+    description: str = "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, or pass render_fallback=true to do that automatically (a second $0.005 call). Paid: $0.005 per call (needs a wallet)."
     args_schema: Type[BaseModel] = ExtractInput
     op: str = "extract"
 
 
 class AgentSearchRenderTool(_PaidTool):
     name: str = "agentsearch_render"
-    description: str = "Render a JavaScript-heavy page in a headless browser and return markdown/text/html/links. Paid: $0.005 per call (needs a wallet)."
+    description: str = "Render a page in a real headless browser and return markdown/text/html/links. Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, dashboards, content loaded by scripts). Paid: $0.005 per call (needs a wallet)."
     args_schema: Type[BaseModel] = RenderInput
     op: str = "render"

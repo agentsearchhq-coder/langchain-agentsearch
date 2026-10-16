@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-agentsearch"
-version = "0.1.0"
+version = "0.2.0"
 description = "LangChain tools for AgentSearch: free live web search, plus pay-per-call extract and JS render ($0.005 USDC on Base via x402)"
 readme = "README.md"
 license = "MIT"
@@ -17,6 +17,8 @@ paid = ["x402[evm]>=2.0"]
 test = ["pytest>=7"]
 
 [project.urls]
+Repository = "https://github.com/agentsearchhq-coder/langchain-agentsearch"
+Issues = "https://github.com/agentsearchhq-coder/langchain-agentsearch/issues"
 Homepage = "https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package"
 
 [tool.hatch.build.targets.wheel]

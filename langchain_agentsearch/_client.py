@@ -26,6 +26,9 @@ SERVICES = {
     "extract": ("agentsearch-web-extract-v1", "/v1/extract"),
     "render": ("agentsearch-web-render-v1", "/v1/render"),
 }
+PACKAGE_NAME = "langchain-agentsearch"
+# Extract output shorter than this (characters of text) counts as "thin": usually a JS-heavy page.
+THIN_CHARS = 200
 DOCS = "https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package"
 
 FREE_LIMIT_MESSAGE = (
@@ -50,6 +53,25 @@ class AgentSearchError(Exception):
         self.status = status
 
 
+def _version() -> str:
+    try:
+        from importlib import metadata
+        return metadata.version(PACKAGE_NAME)
+    except Exception:
+        return "0"
+
+
+def client_headers() -> dict[str, str]:
+    """Anonymous package tag so AgentSearch can count usage per integration (name/version only).
+    Opt out with AGENTSEARCH_NO_CLIENT_TAG=1. AGENTSEARCH_SELF=1 marks our own test traffic."""
+    h: dict[str, str] = {}
+    if (os.environ.get("AGENTSEARCH_NO_CLIENT_TAG") or "").strip() != "1":
+        h["X-Agent-Client"] = f"{PACKAGE_NAME}/{_version()}"
+    if (os.environ.get("AGENTSEARCH_SELF") or "").strip() == "1":
+        h["X-AgentSearch-Self"] = "1"
+    return h
+
+
 def timeout_s() -> float:
     try:
         n = int(os.environ.get("AGENTSEARCH_TIMEOUT_MS", ""))
@@ -72,7 +94,7 @@ def free_search(query: str, max_results: Optional[int] = None, client: Optional[
         body["max_results"] = max_results
     c = client or httpx.Client(timeout=timeout_s())
     try:
-        r = c.post(f"{FREE_RELAY_URL}/v1/search", json=body, headers={"accept": "application/json"})
+        r = c.post(f"{FREE_RELAY_URL}/v1/search", json=body, headers={"accept": "application/json", **client_headers()})
     finally:
         if client is None:
             c.close()
@@ -187,7 +209,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
 
     c = client or httpx.Client(timeout=timeout_s())
     try:
-        unpaid = c.post(url, json=body)
+        unpaid = c.post(url, json=body, headers=client_headers())
         if unpaid.status_code != 402:
             raise AgentSearchError(f"Expected 402 from the portal, got {unpaid.status_code}: {unpaid.text[:300]}. Nothing was signed.", unpaid.status_code)
         http = x402HTTPClientSync(x402ClientSync())
@@ -228,7 +250,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
             _budget.spent += amount  # counted at signing
 
         try:
-            paid = c.post(url, json=body, headers=payer.encode_payment_signature_header(signed))
+            paid = c.post(url, json=body, headers={**client_headers(), **payer.encode_payment_signature_header(signed)})
         except Exception as e:
             raise AgentSearchError(f"A payment of {usd(amount)} was signed but the paid request failed ({e}). Check the wallet before retrying.")
         if not 200 <= paid.status_code < 300:
@@ -258,6 +280,42 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     finally:
         if client is None:
             c.close()
+
+
+def _text_len(v: Any) -> int:
+    """Characters of page text in an extract/render result (markdown/text/content fields, any depth)."""
+    if isinstance(v, dict):
+        return sum(len(x) if k in ("markdown", "text", "content") and isinstance(x, str) else _text_len(x)
+                   for k, x in v.items() if k != "payment")
+    if isinstance(v, list):
+        return sum(_text_len(x) for x in v)
+    return 0
+
+
+def fallback_enabled(flag: Optional[bool]) -> bool:
+    if flag is not None:
+        return bool(flag)
+    return (os.environ.get("AGENTSEARCH_EXTRACT_RENDER_FALLBACK") or "").strip() == "1"
+
+
+def extract_with_fallback(body: dict[str, Any], render_fallback: Optional[bool] = None,
+                          client: Optional[httpx.Client] = None) -> dict[str, Any]:
+    """Extract; if the result is thin (< THIN_CHARS of text) and fallback is on, render the same URL.
+    Off by default because render is a second $0.005 call (still bounded by the session cap)."""
+    out = call_portal("extract", body, client)
+    if not fallback_enabled(render_fallback) or _text_len(out) >= THIN_CHARS:
+        return out
+    rbody: dict[str, Any] = {"url": body["url"]}
+    if body.get("max_chars"):
+        rbody["max_chars"] = body["max_chars"]
+    fm = [f for f in (body.get("formats") or ["markdown"]) if f in ("markdown", "text", "html", "links")]
+    rbody["formats"] = fm or ["markdown"]
+    try:
+        r = call_portal("render", rbody, client)
+    except AgentSearchError as e:
+        return {**out, "render_fallback": {"used": False, "error": str(e)}}
+    return {**r, "render_fallback": {"used": True, "reason": f"extract returned under {THIN_CHARS} chars",
+                                     "extract_payment": out.get("payment")}}
 
 
 def dumps(v: Any) -> str:
