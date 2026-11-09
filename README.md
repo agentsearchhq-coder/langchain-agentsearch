@@ -31,12 +31,35 @@ With an agent:
 from langgraph.prebuilt import create_react_agent
 from langchain_agentsearch import AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool
 
-agent = create_react_agent(llm, [AgentSearchTool(), AgentSearchExtractTool(), AgentSearchRenderTool()])
+agent = create_react_agent(llm, [AgentSearchTool(mode="free"), AgentSearchExtractTool(), AgentSearchRenderTool()])
 ```
+
+## Search, then read the page
+
+Snippets are often not enough to answer from. The usual loop: **search free → extract the 1–2 best URLs as markdown → render only pages extract couldn't read** (JavaScript apps).
+
+```python
+from langchain.agents import create_agent
+from langchain_agentsearch import AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool
+
+SYSTEM = (
+    "Search first. Extract at most 2 of the best results with max_chars=8000. "
+    "If extract returns empty or very short content, render that URL once. Cite every URL you used."
+)
+agent = create_agent(
+    model="openai:gpt-4.1-mini",
+    tools=[AgentSearchTool(mode="free"), AgentSearchExtractTool(), AgentSearchRenderTool()],
+    system_prompt=SYSTEM,
+)
+```
+
+Without a wallet this already runs: search is free and extract/render return an `Error: ...` string (no request, no charge), so the agent answers from snippets. Add a wallet (below) and the same agent reads full pages at $0.005 per page; $1 covers 200 calls. Pass `render_fallback=True` to extract (or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`) to retry thin pages with render automatically.
+
+Full walkthrough: https://agentsearchhq.com/blog/langchain-agent-search-then-read-page?utm_source=langchain-agentsearch&utm_medium=package
 
 ## Paid mode
 
-Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 through the Pocket Network Agentic Portal using the official x402 Python SDK. With a key set, `AgentSearchTool` also goes paid; force free with `AgentSearchTool(mode="free")`.
+Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 through the Pocket Network Agentic Portal using the official x402 Python SDK. **Heads-up (0.2.0):** with a key set, `AgentSearchTool()` in its default `auto` mode also goes paid ($0.005 per search). To pay only for page reads, use `AgentSearchTool(mode="free")`; use `mode="paid"` when you want search with no daily cap.
 
 | Env var | Default |
 |---|---|
