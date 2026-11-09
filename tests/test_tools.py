@@ -12,6 +12,31 @@ from langchain_agentsearch import _client
 def no_wallet(monkeypatch):
     for k in _client.KEY_ENV_VARS:
         monkeypatch.delenv(k, raising=False)
+    monkeypatch.delenv("AGENTSEARCH_MODE", raising=False)
+
+
+def test_wallet_key_alone_keeps_search_free(monkeypatch):
+    """0.2.1: a wallet key enables extract/render but never switches search to paid on its own."""
+    monkeypatch.setenv("AGENTSEARCH_WALLET_PRIVATE_KEY", "11" * 32)
+    seen = mock(monkeypatch, 200, {"results": []})
+    AgentSearchTool().invoke({"query": "x"})
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/search"
+
+
+def test_resolve_search_mode(monkeypatch):
+    assert _client.resolve_search_mode("free") == "free"
+    assert _client.resolve_search_mode("paid") == "paid"
+    assert _client.resolve_search_mode("auto") == "free"
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
+    monkeypatch.setattr(_client, "paid_extra_installed", lambda: True)
+    assert _client.resolve_search_mode("auto") == "paid"
+    monkeypatch.setattr(_client, "paid_extra_installed", lambda: False)
+    assert _client.resolve_search_mode("auto") == "free"
+
+
+def test_messages_point_to_extract():
+    assert "agentsearch_extract" in FREE_LIMIT_MESSAGE and "200 calls" in FREE_LIMIT_MESSAGE
+    assert "nothing was charged" in _client.paid_only_message("agentsearch_extract")
 
 
 def mock(monkeypatch, status, body):

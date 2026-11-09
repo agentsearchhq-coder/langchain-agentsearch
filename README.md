@@ -4,7 +4,7 @@ LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** (25 searches/day per user, up to 5 results, no key). Paid & unlimited if a wallet is set. |
+| `AgentSearchTool` | `agentsearch_search` | **Free** (up to 25 searches/day per IP, up to 5 results, no key). Paid search with no daily cap is opt-in (`mode="paid"` / `AGENTSEARCH_MODE=paid`). |
 | `AgentSearchExtractTool` | `agentsearch_extract` | $0.005/call (USDC on Base via x402) |
 | `AgentSearchRenderTool` | `agentsearch_render` | $0.005/call (headless browser for JS pages) |
 
@@ -59,7 +59,7 @@ Full walkthrough: https://agentsearchhq.com/blog/langchain-agent-search-then-rea
 
 ## Paid mode
 
-Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 through the Pocket Network Agentic Portal using the official x402 Python SDK. **Heads-up (0.2.0):** with a key set, `AgentSearchTool()` in its default `auto` mode also goes paid ($0.005 per search). To pay only for page reads, use `AgentSearchTool(mode="free")`; use `mode="paid"` when you want search with no daily cap.
+Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 through the Pocket Network Agentic Portal using the official x402 Python SDK. From 0.2.1 a wallet key alone keeps search free and only enables extract/render. Paid search (no daily cap, $0.005 per search) is opt-in: `AgentSearchTool(mode="paid")` or `AGENTSEARCH_MODE=paid`. (In 0.2.0 a key switched the default search tool to paid; `mode="free"` works in every version.)
 
 | Env var | Default |
 |---|---|

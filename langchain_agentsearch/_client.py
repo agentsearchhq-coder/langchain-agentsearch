@@ -5,12 +5,15 @@ The wallet key is read from env, used only to sign, and never logged or returned
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import threading
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger("langchain_agentsearch")
 
 FREE_RELAY_URL = "https://relay.agentsearchhq.com"
 FREE_RELAY_DAILY_LIMIT = 25
@@ -26,24 +29,32 @@ SERVICES = {
     "extract": ("agentsearch-web-extract-v1", "/v1/extract"),
     "render": ("agentsearch-web-render-v1", "/v1/render"),
 }
+# Paid search is opt-in: mode="paid" on the tool, or AGENTSEARCH_MODE=paid in the environment.
+# A wallet key in the environment on its own never switches search to paid (it enables extract/render).
+MODE_ENV_VAR = "AGENTSEARCH_MODE"
+PAID_INSTALL_HINT = "pip install 'langchain-agentsearch[paid]'"
 PACKAGE_NAME = "langchain-agentsearch"
 # Extract output shorter than this (characters of text) counts as "thin": usually a JS-heavy page.
 THIN_CHARS = 200
 DOCS = "https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package"
+GUIDE = "https://agentsearchhq.com/blog/langchain-agent-search-then-read-page?utm_source=langchain-agentsearch&utm_medium=package-error"
 
 FREE_LIMIT_MESSAGE = (
-    f"Free search limit reached ({FREE_RELAY_DAILY_LIMIT} searches per day per user; resets daily). "
-    "For unlimited search plus extract/render, set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet "
-    "funded with a little USDC on Base ($0.005 per call via x402, capped by AGENTSEARCH_MAX_TOTAL_ATOMIC, "
-    f"default $1.00) and install langchain-agentsearch[paid]. Docs: {DOCS}"
+    f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
+    "You can still read pages you already found: agentsearch_extract returns a URL as clean markdown "
+    "($0.005 per call, $1 covers 200 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
+    "funded with a little USDC on Base and langchain-agentsearch[paid] is installed. For search with no daily cap, "
+    f"also opt in with mode='paid' or AGENTSEARCH_MODE=paid. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC "
+    f"(default $1.00). Setup: {GUIDE}"
 )
 
 
 def paid_only_message(name: str) -> str:
     return (
-        f"{name} is paid ($0.005 per call in USDC on Base via x402). No wallet is configured, so no call was made. "
-        "Set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base and "
-        f"install langchain-agentsearch[paid]. Docs: {DOCS}"
+        f"{name} is paid ($0.005 per call in USDC on Base via x402; $1 covers 200 calls). No wallet is configured, "
+        "so no call was made and nothing was charged. Answer from search results for now, or set "
+        "AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base and "
+        f"install langchain-agentsearch[paid]. Search stays free. Setup: {GUIDE}"
     )
 
 
@@ -112,6 +123,42 @@ def free_search(query: str, max_results: Optional[int] = None, client: Optional[
 
 def has_wallet_key() -> bool:
     return any((os.environ.get(n) or "").strip() for n in KEY_ENV_VARS)
+
+
+def env_mode() -> str:
+    """AGENTSEARCH_MODE as "paid", "free" or "" (unset or unrecognised). Only affects mode="auto"."""
+    v = (os.environ.get(MODE_ENV_VAR) or "").strip().lower()
+    return v if v in ("paid", "free") else ""
+
+
+def paid_extra_installed() -> bool:
+    """True if the [paid] extra (x402 SDK + eth-account) is importable. Imports nothing that signs."""
+    try:
+        import eth_account  # noqa: F401
+        from x402 import x402ClientSync  # noqa: F401
+        from x402.http import x402HTTPClientSync  # noqa: F401
+        from x402.mechanisms.evm.exact import register_exact_evm_client  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def resolve_search_mode(mode: str = "auto") -> str:
+    """Return "paid" or "free" for a search call.
+
+    mode="paid"/"free" are explicit. mode="auto" is free unless AGENTSEARCH_MODE=paid; a wallet key alone does
+    NOT switch search to paid (changed in 0.2.1). If paid is opted in via env but the [paid] extra is missing,
+    auto falls back to free with a warning.
+    """
+    if mode in ("paid", "free"):
+        return mode
+    if env_mode() == "paid":
+        if not paid_extra_installed():
+            logger.warning("AgentSearch: AGENTSEARCH_MODE=paid is set but the [paid] extra is not installed; "
+                           "using free search. To enable paid search: %s", PAID_INSTALL_HINT)
+            return "free"
+        return "paid"
+    return "free"
 
 
 def _read_wallet_key() -> Optional[str]:

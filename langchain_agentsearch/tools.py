@@ -35,7 +35,8 @@ def _err(e: Exception) -> str:
 
 
 class AgentSearchTool(BaseTool):
-    """Live web search. Free by default (25/day per user); paid & unlimited when a wallet key is set."""
+    """Live web search. Free by default (up to 25/day per IP). Paid search (no daily cap) is opt-in:
+    mode="paid", or mode="auto" with AGENTSEARCH_MODE=paid. A wallet key alone does not make search paid."""
 
     name: str = "agentsearch_search"
     description: str = "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs."
@@ -44,8 +45,7 @@ class AgentSearchTool(BaseTool):
 
     def _run(self, query: str, max_results: Optional[int] = None, run_manager: Any = None) -> str:
         try:
-            paid = self.mode == "paid" or (self.mode == "auto" and c.has_wallet_key())
-            if paid:
+            if c.resolve_search_mode(self.mode) == "paid":
                 body: dict[str, Any] = {"query": query}
                 if max_results:
                     body["max_results"] = max_results
