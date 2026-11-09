@@ -13,6 +13,7 @@ def no_wallet(monkeypatch):
     for k in _client.KEY_ENV_VARS:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.delenv("AGENTSEARCH_MODE", raising=False)
+    monkeypatch.delenv("AGENTSEARCH_FREE_TRIAL", raising=False)
 
 
 def test_wallet_key_alone_keeps_search_free(monkeypatch):
@@ -70,7 +71,8 @@ def test_429(monkeypatch):
     assert AgentSearchTool().invoke({"query": "x"}) == f"Error: {FREE_LIMIT_MESSAGE}"
 
 
-def test_paid_without_wallet():
+def test_paid_without_wallet_trial_off(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_FREE_TRIAL", "0")
     assert "No wallet" in AgentSearchExtractTool().invoke({"url": "https://example.com"})
     assert "No wallet" in AgentSearchRenderTool().invoke({"url": "https://example.com"})
 
@@ -129,3 +131,61 @@ def test_paid_flow_signs_with_x402_sdk(monkeypatch):
     assert len(calls) == 2 and _client.session_spent_atomic() == 5000
     monkeypatch.setenv("AGENTSEARCH_MAX_TOTAL_ATOMIC", "5000")
     assert "cap reached" in AgentSearchExtractTool().invoke({"url": "https://example.com"})
+
+
+# ---- 0.3.0: no-wallet free trial ----
+def test_trial_extract_uses_relay(monkeypatch):
+    seen = mock(monkeypatch, 200, {"title": "Example", "markdown": "x" * 300, "provider": "p", "free_trial": {"remaining_today": 4}})
+    out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/extract"
+    assert seen["body"] == {"url": "https://example.com"}
+    assert out["title"] == "Example" and "provider" not in out and "Free trial call" in out["note"]
+    assert out["free_trial"]["remaining_today"] == 4
+
+
+def test_trial_render_drops_screenshot(monkeypatch):
+    seen = mock(monkeypatch, 200, {"title": "R", "markdown": "y"})
+    out = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com", "screenshot": True}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/render"
+    assert "screenshot" not in seen["body"]
+    assert "Screenshots are not part of the free trial" in out["note"]
+
+
+def test_trial_429_points_to_wallet_setup(monkeypatch):
+    mock(monkeypatch, 429, {"error": {"code": "free_trial_limit_reached", "message": "5 free extract calls per IP per day"}})
+    out = AgentSearchExtractTool().invoke({"url": "https://example.com"})
+    assert "Free trial limit reached for agentsearch_extract" in out
+    assert "agentsearchhq.com/wallet-setup" in out and "5 free extract calls" in out
+
+
+def test_trial_unavailable_falls_back_to_setup_message(monkeypatch):
+    mock(monkeypatch, 404, {"detail": "Not Found"})
+    assert "No wallet" in AgentSearchRenderTool().invoke({"url": "https://example.com"})
+
+
+def test_trial_400_not_counted(monkeypatch):
+    mock(monkeypatch, 400, {"error": {"code": "URL_NOT_ALLOWED"}})
+    out = AgentSearchExtractTool().invoke({"url": "http://10.0.0.1/"})
+    assert "HTTP 400, not counted" in out and "URL_NOT_ALLOWED" in out
+
+
+def test_trial_fallback_uses_render_trial(monkeypatch):
+    urls = []
+
+    def handler(req):
+        urls.append(str(req.url))
+        if req.url.path.endswith("/extract"):
+            return httpx.Response(200, json={"markdown": "thin"})
+        return httpx.Response(200, json={"markdown": "z" * 500})
+
+    real = httpx.Client
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler)))
+    out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com", "render_fallback": True}))
+    assert urls == ["https://relay.agentsearchhq.com/v1/extract", "https://relay.agentsearchhq.com/v1/render"]
+    assert out["render_fallback"]["used"] is True
+
+
+@pytest.mark.skipif(not os.environ.get("AGENTSEARCH_LIVE"), reason="set AGENTSEARCH_LIVE=1")
+def test_live_trial_extract():
+    out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
+    assert out.get("title") == "Example Domain"

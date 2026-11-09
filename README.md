@@ -5,8 +5,8 @@ LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source
 | Tool | Name | Cost |
 |---|---|---|
 | `AgentSearchTool` | `agentsearch_search` | **Free** (up to 25 searches/day per IP, up to 5 results, no key). Paid search with no daily cap is opt-in (`mode="paid"` / `AGENTSEARCH_MODE=paid`). |
-| `AgentSearchExtractTool` | `agentsearch_extract` | $0.005/call (USDC on Base via x402) |
-| `AgentSearchRenderTool` | `agentsearch_render` | $0.005/call (headless browser for JS pages) |
+| `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.005/call (USDC on Base via x402) |
+| `AgentSearchRenderTool` | `agentsearch_render` | Free trial without a wallet (3/day per IP, no screenshots), then $0.005/call (headless browser for JS pages) |
 
 ## Install
 
@@ -53,7 +53,7 @@ agent = create_agent(
 )
 ```
 
-Without a wallet this already runs: search is free and extract/render return an `Error: ...` string (no request, no charge), so the agent answers from snippets. Add a wallet (below) and the same agent reads full pages at $0.005 per page; $1 covers 200 calls. Pass `render_fallback=True` to extract (or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`) to retry thin pages with render automatically.
+Without a wallet this already runs: search is free, and from 0.3.0 extract/render use a small free trial (5 extract and 3 render calls per IP per UTC day, shared daily capacity, no screenshots). Past the trial they return an `Error: ...` string with wallet setup steps (https://agentsearchhq.com/wallet-setup), so the agent answers from snippets. Set `AGENTSEARCH_FREE_TRIAL=0` to skip the trial (no request without a wallet). Add a wallet (below) and the same agent reads full pages at $0.005 per page; $1 covers 200 calls. Pass `render_fallback=True` to extract (or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`) to retry thin pages with render automatically.
 
 Full walkthrough: https://agentsearchhq.com/blog/langchain-agent-search-then-read-page?utm_source=langchain-agentsearch&utm_medium=package
 

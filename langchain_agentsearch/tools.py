@@ -60,10 +60,17 @@ class _PaidTool(BaseTool):
 
     def _run(self, run_manager: Any = None, **kwargs: Any) -> str:
         try:
-            if not c.has_wallet_key():
-                raise c.AgentSearchError(c.paid_only_message(self.name))
             fb = kwargs.pop("render_fallback", None)
             body = {k: v for k, v in kwargs.items() if v is not None}
+            if not c.has_wallet_key():
+                if not c.free_trial_enabled():
+                    raise c.AgentSearchError(c.paid_only_message(self.name))
+                try:
+                    if self.op == "extract":
+                        return c.dumps(c.free_extract_with_fallback(body, fb))
+                    return c.dumps(c.free_trial(self.op, body))
+                except c.FreeTrialUnavailable:
+                    raise c.AgentSearchError(c.paid_only_message(self.name))
             if self.op == "extract":
                 return c.dumps(c.extract_with_fallback(body, fb))
             return c.dumps(c.call_portal(self.op, body))
@@ -73,13 +80,13 @@ class _PaidTool(BaseTool):
 
 class AgentSearchExtractTool(_PaidTool):
     name: str = "agentsearch_extract"
-    description: str = "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, or pass render_fallback=true to do that automatically (a second $0.005 call). Paid: $0.005 per call (needs a wallet)."
+    description: str = "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, or pass render_fallback=true to do that automatically (a second $0.005 call). No wallet: free trial, 5 calls/day per IP. With a wallet: $0.005 per call."
     args_schema: Type[BaseModel] = ExtractInput
     op: str = "extract"
 
 
 class AgentSearchRenderTool(_PaidTool):
     name: str = "agentsearch_render"
-    description: str = "Render a page in a real headless browser and return markdown/text/html/links. Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, dashboards, content loaded by scripts). Paid: $0.005 per call (needs a wallet)."
+    description: str = "Render a page in a real headless browser and return markdown/text/html/links. Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, dashboards, content loaded by scripts). No wallet: free trial, 3 calls/day per IP (no screenshots). With a wallet: $0.005 per call."
     args_schema: Type[BaseModel] = RenderInput
     op: str = "render"
