@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.0 (2026-11-09)
+- **Direct x402 is now the default paid route.** With the `[paid]` extra and a wallet key, paid calls go to AgentSearch's own x402 API on Base mainnet (`https://api.agentsearchhq.com`): extract $0.007, render $0.010, search $0.008 (search still needs `mode="paid"` or `AGENTSEARCH_MODE=paid`). **Wallet users now pay these direct prices, slightly more than the Pocket route's $0.005.** Hard ceiling $0.010 per call; session cap unchanged (default $1.00).
+- New `AGENTSEARCH_PAYMENT_ROUTE=direct|pocket`; `pocket` keeps the Pocket Network Agentic Portal exactly as in 0.4.0 ($0.005, $0.005 ceiling). The 0.4.0 switch `AGENTSEARCH_X402_DIRECT=0` also selects `pocket`. An unrecognized route value refuses with nothing signed.
+- A per-call cap below a direct price (e.g. an old `5000`) refuses with a hint (raise to `10000`, remove it, or use the Pocket route).
+- Unchanged: no wallet = free search and the extract/render free trial, exactly as before. Matches `@agentsearchhq/agentsearch-mcp` 1.6.0.
+
 ## 0.4.0 (2026-11-09)
 - **Direct x402 (opt-in).** `AGENTSEARCH_X402_DIRECT=1` (with the `[paid]` extra and a wallet key) sends paid calls to AgentSearch's own x402 API on Base mainnet (`https://api.agentsearchhq.com/x402/v1/{search,extract,render}`) instead of the Pocket portal: extract $0.007, render $0.010, search $0.008 (search still needs `mode="paid"` or `AGENTSEARCH_MODE=paid`). Signs only exact/USDC on Base to AgentSearch's pinned payee; hard ceiling $0.010 per call; shared session cap. `AGENTSEARCH_X402_DIRECT_URL` overrides the host (https, or http on localhost) for testing.
 - Unchanged by default: without the variable the paid rail is the Pocket portal ($0.005), and free search/free trial behave as in 0.3.0. Matches `@agentsearchhq/agentsearch-mcp` 1.5.0.

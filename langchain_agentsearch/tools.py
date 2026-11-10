@@ -17,7 +17,7 @@ class ExtractInput(BaseModel):
     url: str = Field(description="http(s) URL to extract")
     formats: Optional[list[str]] = Field(default=None, description='e.g. ["markdown"]')
     max_chars: Optional[int] = Field(default=None, gt=0)
-    render_fallback: Optional[bool] = Field(default=None, description="If extract returns thin content, retry with render (extra $0.005)")
+    render_fallback: Optional[bool] = Field(default=None, description="If extract returns thin content, retry with render (extra paid call: $0.010 direct, $0.005 via Pocket)")
 
 
 class RenderInput(BaseModel):

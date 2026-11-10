@@ -1,5 +1,5 @@
-"""HTTP layer: free relay search and x402 pay-per-call via the Pocket Network Agentic Portal, or (opt-in,
-AGENTSEARCH_X402_DIRECT=1) directly via AgentSearch's own x402 API on Base.
+"""HTTP layer: free relay search and x402 pay-per-call, by default (since 0.5.0) directly to AgentSearch's own
+x402 API on Base; AGENTSEARCH_PAYMENT_ROUTE=pocket (or AGENTSEARCH_X402_DIRECT=0) uses the Pocket Network Agentic Portal.
 
 The wallet key is read from env, used only to sign, and never logged or returned.
 """
@@ -43,22 +43,43 @@ WALLET_SETUP = "https://agentsearchhq.com/wallet-setup?utm_source=langchain-agen
 # 0.3.0: no-wallet free trial of extract/render on the free relay (limits enforced server-side, per IP per UTC day).
 FREE_TRIAL_LIMITS = {"extract": 5, "render": 3}
 FREE_TRIAL_ENV_VAR = "AGENTSEARCH_FREE_TRIAL"
-# 0.4.0: opt-in direct x402 to AgentSearch's own API on Base (instead of the Pocket portal).
+# 0.4.0: opt-in direct x402 to AgentSearch's own API on Base. 0.5.0: direct is the default paid route.
 DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT"
+ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE"
 DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com"
 DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337"
 DIRECT_MAX_PER_CALL_ATOMIC = 10_000  # $0.010 hard ceiling (search $0.008, extract $0.007, render $0.010)
 DIRECT_FIELDS = {"search": ("query", "max_results"), "extract": ("url",), "render": ("url",)}
 
 
+def payment_route() -> str:
+    """'direct' (default since 0.5.0) or 'pocket'. AGENTSEARCH_PAYMENT_ROUTE wins; the 0.4.0 switch
+    AGENTSEARCH_X402_DIRECT=0 also selects 'pocket'. Any other route value raises (nothing is signed)."""
+    v = (os.environ.get(ROUTE_ENV_VAR) or "").strip().lower()
+    if v:
+        if v in ("direct", "x402", "agentsearch"):
+            return "direct"
+        if v in ("pocket", "portal"):
+            return "pocket"
+        raise AgentSearchError(f"{ROUTE_ENV_VAR} must be 'direct' (default) or 'pocket', got {v!r}. Nothing was signed.")
+    if (os.environ.get(DIRECT_ENV_VAR) or "").strip().lower() in ("0", "false", "no", "off"):
+        return "pocket"
+    return "direct"
+
+
 def direct_enabled() -> bool:
-    """AGENTSEARCH_X402_DIRECT=1/true/yes/on routes paid calls to AgentSearch's own x402 API. Default off."""
-    return (os.environ.get(DIRECT_ENV_VAR) or "").strip().lower() in ("1", "true", "yes", "on")
+    """True unless the Pocket route is selected (AGENTSEARCH_PAYMENT_ROUTE=pocket or AGENTSEARCH_X402_DIRECT=0)."""
+    return payment_route() == "direct"
+
+
+PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own API (search $0.008, extract $0.007, "
+                   "render $0.010; $1 covers about 140 extracts; failed calls are not charged), or $0.005 per call through "
+                   "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket")
 
 FREE_LIMIT_MESSAGE = (
     f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
     "You can still read pages you already found: agentsearch_extract returns a URL as clean markdown "
-    "(free trial: 5 calls/day per IP with no wallet; then $0.005 per call, $1 covers 200 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
+    "(free trial: 5 calls/day per IP with no wallet; then $0.007 per call to AgentSearch's x402 API, $1 covers about 140 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
     "funded with a little USDC on Base and langchain-agentsearch[paid] is installed. For search with no daily cap, "
     f"also opt in with mode='paid' or AGENTSEARCH_MODE=paid. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC "
     f"(default $1.00). Setup: {GUIDE}"
@@ -67,7 +88,7 @@ FREE_LIMIT_MESSAGE = (
 
 def paid_only_message(name: str) -> str:
     return (
-        f"{name} is paid ($0.005 per call in USDC on Base via x402; $1 covers 200 calls). No wallet is configured, "
+        f"{name} is paid ({PRICES_SENTENCE}). No wallet is configured, "
         "so no call was made and nothing was charged. Answer from search results for now, or set "
         "AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base and "
         f"install langchain-agentsearch[paid]. Search stays free. Setup: {GUIDE}"
@@ -83,8 +104,8 @@ def trial_limit_message(op: str, relay_message: str = "") -> str:
     reason = f" Relay said: {relay_message[:300]}" if relay_message else ""
     return (
         f"Free trial limit reached for agentsearch_{op}: {FREE_TRIAL_LIMITS[op]} {op} calls/day per IP (resets 00:00 UTC), "
-        f"subject to shared daily capacity.{reason} Continue at $0.005/call via Pocket (USDC on Base, no account, no API key; "
-        "$1 covers 200 calls): set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base "
+        f"subject to shared daily capacity.{reason} Continue with a wallet: {op} costs {'$0.007' if op == 'extract' else '$0.010'} per call "
+        "in USDC on Base via AgentSearch's x402 API (no account, no API key; $0.005 via Pocket with AGENTSEARCH_PAYMENT_ROUTE=pocket): set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base "
         f"and install langchain-agentsearch[paid]. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC (default $1.00). "
         f"Wallet setup (about 2 minutes): {WALLET_SETUP}"
     )
@@ -376,7 +397,16 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
                     f"Session spend cap reached: {usd(_budget.spent)} of {usd(session_cap)} signed. "
                     "Raise AGENTSEARCH_MAX_TOTAL_ATOMIC to spend more. Nothing was signed."
                 )
-            chosen = select_accept(list(required.accepts), ceiling, payee)
+            try:
+                chosen = select_accept(list(required.accepts), ceiling, payee)
+            except AgentSearchError as e:
+                if direct and per_call < hard_cap and ceiling == per_call:
+                    raise AgentSearchError(
+                        f"{e} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC={per_call}) is below this route's price; since 0.5.0 "
+                        "paid calls go to AgentSearch's own x402 API (search $0.008, extract $0.007, render $0.010). Raise the cap "
+                        "to 10000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route."
+                    ) from None
+                raise
             amount = int(chosen.amount)
 
             def selector(_v: int, options: list[Any]) -> Any:
@@ -450,7 +480,7 @@ def fallback_enabled(flag: Optional[bool]) -> bool:
 def extract_with_fallback(body: dict[str, Any], render_fallback: Optional[bool] = None,
                           client: Optional[httpx.Client] = None) -> dict[str, Any]:
     """Extract; if the result is thin (< THIN_CHARS of text) and fallback is on, render the same URL.
-    Off by default because render is a second $0.005 call (still bounded by the session cap)."""
+    Off by default because render is a second paid call ($0.010 direct, $0.005 via Pocket) (still bounded by the session cap)."""
     out = call_portal("extract", body, client)
     if not fallback_enabled(render_fallback) or _text_len(out) >= THIN_CHARS:
         return out

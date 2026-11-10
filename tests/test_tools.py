@@ -14,6 +14,9 @@ def no_wallet(monkeypatch):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.delenv("AGENTSEARCH_MODE", raising=False)
     monkeypatch.delenv("AGENTSEARCH_FREE_TRIAL", raising=False)
+    monkeypatch.delenv("AGENTSEARCH_X402_DIRECT", raising=False)
+    # These tests cover the Pocket route (opt-in since 0.5.0); test_direct.py covers the default direct route.
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
 
 
 def test_wallet_key_alone_keeps_search_free(monkeypatch):
@@ -36,7 +39,7 @@ def test_resolve_search_mode(monkeypatch):
 
 
 def test_messages_point_to_extract():
-    assert "agentsearch_extract" in FREE_LIMIT_MESSAGE and "200 calls" in FREE_LIMIT_MESSAGE
+    assert "agentsearch_extract" in FREE_LIMIT_MESSAGE and "140 calls" in FREE_LIMIT_MESSAGE
     assert "nothing was charged" in _client.paid_only_message("agentsearch_extract")
 
 

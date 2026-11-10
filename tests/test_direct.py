@@ -21,7 +21,7 @@ _REAL_CLIENT = httpx.Client
 @pytest.fixture(autouse=True)
 def env(monkeypatch):
     for k in (*_client.KEY_ENV_VARS, "AGENTSEARCH_MODE", "AGENTSEARCH_FREE_TRIAL", "AGENTSEARCH_X402_DIRECT",
-              "AGENTSEARCH_X402_DIRECT_URL", "AGENTSEARCH_MAX_PER_CALL_ATOMIC", "AGENTSEARCH_MAX_TOTAL_ATOMIC"):
+              "AGENTSEARCH_X402_DIRECT_URL", "AGENTSEARCH_PAYMENT_ROUTE", "AGENTSEARCH_MAX_PER_CALL_ATOMIC", "AGENTSEARCH_MAX_TOTAL_ATOMIC"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("AGENTSEARCH_WALLET_PRIVATE_KEY", Account.create().key.hex())  # throwaway, unfunded
     _client.reset_session_budget()
@@ -51,8 +51,18 @@ def mock_api(monkeypatch, op, over=None, paid_status=200):
     return seen
 
 
-def test_default_rail_unchanged(monkeypatch):
+def test_default_rail_is_direct_pocket_opt_in(monkeypatch):
+    """0.5.0: with a wallet key, paid calls go to AgentSearch's own x402 API; Pocket is opt-in."""
+    assert _client.direct_enabled()
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
     assert not _client.direct_enabled()
+    monkeypatch.delenv("AGENTSEARCH_PAYMENT_ROUTE")
+    monkeypatch.setenv("AGENTSEARCH_X402_DIRECT", "0")  # 0.4.0 switch still selects Pocket
+    assert not _client.direct_enabled()
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "direct")
+    assert _client.direct_enabled()
+    monkeypatch.delenv("AGENTSEARCH_X402_DIRECT")
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
     seen = {}
 
     def handler(req):
@@ -64,9 +74,31 @@ def test_default_rail_unchanged(monkeypatch):
     assert seen["url"].startswith("https://agent.pocket.network/v1/agentsearch-web-extract-v1")
 
 
+def test_default_extract_reaches_direct_api(monkeypatch):
+    seen = mock_api(monkeypatch, "extract")
+    out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
+    assert seen["calls"][0]["url"] == f"{API}/x402/v1/extract"
+    assert out["payment"]["payTo"] == _client.DIRECT_PAYEE and out["payment"]["amountAtomic"] == "7000"
+
+
+def test_invalid_route_refuses(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "bogus")
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
+    out = AgentSearchExtractTool().invoke({"url": "https://example.com"})
+    assert "AGENTSEARCH_PAYMENT_ROUTE must be" in out
+
+
+def test_old_pocket_per_call_cap_gets_hint(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "5000")
+    seen = mock_api(monkeypatch, "extract")
+    out = AgentSearchExtractTool().invoke({"url": "https://example.com"})
+    assert "AGENTSEARCH_PAYMENT_ROUTE=pocket" in out
+    assert all(c["sig"] is None for c in seen["calls"])
+
+
 @pytest.mark.parametrize("op", ["search", "extract", "render"])
 def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
-    monkeypatch.setenv("AGENTSEARCH_X402_DIRECT", "1")
+    # 0.5.0: no env needed, direct is the default paid route.
     seen = mock_api(monkeypatch, op)
     if op == "search":
         out = json.loads(AgentSearchTool(mode="paid").invoke({"query": "q", "max_results": 3}))
@@ -113,7 +145,7 @@ MOCK = os.environ.get("AGENTSEARCH_TEST_DIRECT_MOCK")  # e.g. http://127.0.0.1:8
 
 @pytest.mark.skipif(not MOCK, reason="local mock direct API not running")
 def test_e2e_against_local_mock(monkeypatch):
-    monkeypatch.setenv("AGENTSEARCH_X402_DIRECT", "1")
+    # 0.5.0: default route, no switch needed
     monkeypatch.setenv("AGENTSEARCH_X402_DIRECT_URL", MOCK)
     s = json.loads(AgentSearchTool(mode="paid").invoke({"query": "x402"}))
     e = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
