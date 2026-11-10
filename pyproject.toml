@@ -4,19 +4,36 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-agentsearch"
-version = "0.6.0"
-description = "LangChain tools for AgentSearch: free live web search, a no-wallet free trial of extract and JS render, then pay per call in USDC on Base via x402 to AgentSearch's own API"
+version = "0.6.1"
+description = "LangChain tools for AgentSearch: free live web search with no API key, plus extract, JS render and search-and-read paid per call in USDC on Base via x402"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
+authors = [{ name = "AgentSearch" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Internet :: WWW/HTTP :: Indexing/Search",
+    "Typing :: Typed",
+]
 dependencies = ["langchain-core>=0.3.0,<2.0.0", "httpx>=0.25", "pydantic>=2"]
-keywords = ["langchain", "agentsearch", "web-search", "tools", "agents", "x402"]
+keywords = ["langchain", "langgraph", "agentsearch", "web-search", "search", "extract", "web-scraping", "tools", "agents", "llm", "rag", "x402"]
 
 [project.optional-dependencies]
 paid = ["x402[evm]>=2.0"]
 test = ["pytest>=7"]
 
 [project.urls]
+Documentation = "https://agentsearchhq.com/docs?utm_source=langchain-agentsearch&utm_medium=package"
+Changelog = "https://github.com/agentsearchhq-coder/langchain-agentsearch/blob/main/CHANGELOG.md"
 Repository = "https://github.com/agentsearchhq-coder/langchain-agentsearch"
 Issues = "https://github.com/agentsearchhq-coder/langchain-agentsearch/issues"
 Homepage = "https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package"

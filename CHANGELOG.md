@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 (2026-11-10)
+- **Input checks before any request.** An empty or whitespace-only `query`, a missing/invalid URL (not http/https, no host, embedded credentials, localhost, private/loopback/link-local IPs, single-label or `.local`/`.internal` hosts) or a non-numeric count returns an `Error: ...` string with no HTTP call, so it never counts against the free relay's per-IP limits and nothing is signed. Queries are trimmed (max 400 chars); URLs are trimmed.
+- `max_results: null` means the default; out-of-range `max_results`/`num_results` are clamped to 1-5 instead of failing schema validation. Schema type errors now come back as an `Error: ...` string instead of raising.
+- Aliases LLMs often use: `q`/`input`/`search_query` -> `query`; `num_results`/`k`/`limit` -> `max_results` (search) and `max_results`/`k` -> `num_results` (search-and-read); `link`/`href` -> `url`.
+- Tool descriptions now show direct prices (extract $0.007, render $0.010, paid search $0.008) instead of the old $0.005.
+- README: Search + Read tool in the table, `langchain.agents.create_agent` quick start with a LangGraph alternative, docs links. Package metadata: classifiers, keywords, Documentation URL.
+
 ## 0.6.0 (2026-11-10)
 - **Search + Read in one paid call.** New `AgentSearchSearchAndReadTool` (`agentsearch_search_and_read`) posts to `https://api.agentsearchhq.com/x402/v1/search_and_read` at **$0.015**, charged only when at least one page returns text. Default 3 results (max 5), default 8000 characters per page (max 20000); `render_fallback=true` renders at most one thin page in the same call. About 48% less than a $0.008 search plus three $0.007 extracts ($0.029), and one payment instead of four.
 - Direct-only: not on the Pocket route, not on the free relay, not on a self-hosted base URL. A Pocket or no-wallet call refuses with nothing signed. Search itself stays free by default.

@@ -168,7 +168,7 @@ def test_trial_unavailable_falls_back_to_setup_message(monkeypatch):
 
 def test_trial_400_not_counted(monkeypatch):
     mock(monkeypatch, 400, {"error": {"code": "URL_NOT_ALLOWED"}})
-    out = AgentSearchExtractTool().invoke({"url": "http://10.0.0.1/"})
+    out = AgentSearchExtractTool().invoke({"url": "https://blocked.example.com/"})
     assert "HTTP 400, not counted" in out and "URL_NOT_ALLOWED" in out
 
 
