@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 (2026-11-10)
+- **Search + Read in one paid call.** New `AgentSearchSearchAndReadTool` (`agentsearch_search_and_read`) posts to `https://api.agentsearchhq.com/x402/v1/search_and_read` at **$0.015**, charged only when at least one page returns text. Default 3 results (max 5), default 8000 characters per page (max 20000); `render_fallback=true` renders at most one thin page in the same call. About 48% less than a $0.008 search plus three $0.007 extracts ($0.029), and one payment instead of four.
+- Direct-only: not on the Pocket route, not on the free relay, not on a self-hosted base URL. A Pocket or no-wallet call refuses with nothing signed. Search itself stays free by default.
+- Direct per-call ceiling raised to **$0.020** (`DIRECT_MAX_PER_CALL_ATOMIC = 20000`) so a $0.015 search-and-read can settle. An old `10000` cap now refuses with a hint to raise it to `20000`. Matches `@agentsearchhq/agentsearch-mcp` 1.7.0.
+
 ## 0.5.0 (2026-11-09)
 - **Direct x402 is now the default paid route.** With the `[paid]` extra and a wallet key, paid calls go to AgentSearch's own x402 API on Base mainnet (`https://api.agentsearchhq.com`): extract $0.007, render $0.010, search $0.008 (search still needs `mode="paid"` or `AGENTSEARCH_MODE=paid`). **Wallet users now pay these direct prices, slightly more than the Pocket route's $0.005.** Hard ceiling $0.010 per call; session cap unchanged (default $1.00).
 - New `AGENTSEARCH_PAYMENT_ROUTE=direct|pocket`; `pocket` keeps the Pocket Network Agentic Portal exactly as in 0.4.0 ($0.005, $0.005 ceiling). The 0.4.0 switch `AGENTSEARCH_X402_DIRECT=0` also selects `pocket`. An unrecognized route value refuses with nothing signed.

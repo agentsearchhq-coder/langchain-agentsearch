@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-agentsearch"
-version = "0.5.0"
+version = "0.6.0"
 description = "LangChain tools for AgentSearch: free live web search, a no-wallet free trial of extract and JS render, then pay per call in USDC on Base via x402 to AgentSearch's own API"
 readme = "README.md"
 license = "MIT"

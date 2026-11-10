@@ -7,13 +7,13 @@ import os
 import httpx
 import pytest
 
-from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchTool
+from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool, AgentSearchTool
 from langchain_agentsearch import _client
 
 pytest.importorskip("x402")
 from eth_account import Account  # noqa: E402
 
-PRICES = {"search": "8000", "extract": "7000", "render": "10000"}
+PRICES = {"search": "8000", "extract": "7000", "render": "10000", "search_and_read": "15000"}
 API = "https://api.agentsearchhq.com"
 _REAL_CLIENT = httpx.Client
 
@@ -96,7 +96,7 @@ def test_old_pocket_per_call_cap_gets_hint(monkeypatch):
     assert all(c["sig"] is None for c in seen["calls"])
 
 
-@pytest.mark.parametrize("op", ["search", "extract", "render"])
+@pytest.mark.parametrize("op", ["search", "extract", "render", "search_and_read"])
 def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
     # 0.5.0: no env needed, direct is the default paid route.
     seen = mock_api(monkeypatch, op)
@@ -104,6 +104,8 @@ def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
         out = json.loads(AgentSearchTool(mode="paid").invoke({"query": "q", "max_results": 3}))
     elif op == "extract":
         out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
+    elif op == "search_and_read":
+        out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "q", "num_results": 3}))
     else:
         out = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com", "formats": ["markdown"]}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/{op}"
@@ -114,7 +116,7 @@ def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
     assert out["payment"]["settled"] is True
 
 
-@pytest.mark.parametrize("over", [{"payTo": _client.PORTAL_PAYEE}, {"amount": "10001"}, {"network": "eip155:84532"},
+@pytest.mark.parametrize("over", [{"payTo": _client.PORTAL_PAYEE}, {"amount": "20001"}, {"network": "eip155:84532"},
                                   {"asset": "0x" + "11" * 20}])
 def test_direct_refuses_bad_terms(monkeypatch, over):
     monkeypatch.setenv("AGENTSEARCH_X402_DIRECT", "1")
@@ -126,7 +128,7 @@ def test_direct_refuses_bad_terms(monkeypatch, over):
 def test_direct_per_call_cap_can_only_lower(monkeypatch):
     monkeypatch.setenv("AGENTSEARCH_X402_DIRECT", "1")
     monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "999999")
-    seen = mock_api(monkeypatch, "render", {"amount": "20000"})
+    seen = mock_api(monkeypatch, "render", {"amount": "20001"})
     assert "Nothing was signed" in AgentSearchRenderTool().invoke({"url": "https://example.com"})
     monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "7000")
     seen = mock_api(monkeypatch, "render")
@@ -152,3 +154,27 @@ def test_e2e_against_local_mock(monkeypatch):
     r = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com"}))
     assert [x["payment"]["amountAtomic"] for x in (s, e, r)] == ["8000", "7000", "10000"]
     assert all(x["payment"]["settled"] for x in (s, e, r))
+
+
+def test_search_and_read_is_direct_only(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
+    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    assert "own x402 API" in out and "Nothing was signed" in out and "Pocket" in out
+
+
+def test_search_and_read_old_cap_needs_20000(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "10000")
+    seen = mock_api(monkeypatch, "search_and_read")
+    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    assert "to 20000" in out and "Nothing was signed" in out
+    assert all(c["sig"] is None for c in seen["calls"])
+
+
+def test_search_and_read_no_key_is_not_on_free_relay(monkeypatch):
+    for k in _client.KEY_ENV_VARS:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
+    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    assert "No wallet is configured" in out or "no wallet" in out.lower()
+    assert "Nothing was signed" in out or "no call was made" in out.lower()

@@ -30,6 +30,13 @@ class RenderInput(BaseModel):
     wait_ms: Optional[int] = Field(default=None, ge=0)
 
 
+class SearchAndReadInput(BaseModel):
+    query: str = Field(description="Search query", min_length=1)
+    num_results: Optional[int] = Field(default=None, ge=1, le=5, description="How many top results to read, default 3, max 5")
+    max_chars: Optional[int] = Field(default=None, gt=0, le=20000, description="Max characters of page text per result, default 8000, max 20000")
+    render_fallback: Optional[bool] = Field(default=None, description="If extract is thin, render at most one page in the same $0.015 call")
+
+
 def _err(e: Exception) -> str:
     return f"Error: {e}"
 
@@ -90,3 +97,29 @@ class AgentSearchRenderTool(_PaidTool):
     description: str = "Render a page in a real headless browser and return markdown/text/html/links. Use when agentsearch_extract returns empty or thin content, or for JavaScript-heavy pages (SPAs, dashboards, content loaded by scripts). No wallet: free trial, 3 calls/day per IP (no screenshots). With a wallet: $0.005 per call."
     args_schema: Type[BaseModel] = RenderInput
     op: str = "render"
+
+
+class AgentSearchSearchAndReadTool(BaseTool):
+    """Search the live web and read the top pages in one paid call on AgentSearch's direct x402 API ($0.015 when at least one page returns text). Direct only — not on Pocket, not on the free relay."""
+
+    name: str = "agentsearch_search_and_read"
+    description: str = (
+        "Search the live web and return the top results with each page's main text in one paid call ($0.015 USDC on Base, charged only when at least one page returns text). "
+        "Cheaper than a $0.008 search plus three $0.007 extracts ($0.029) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). "
+        "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket or the free relay. Search itself stays free by default."
+    )
+    args_schema: Type[BaseModel] = SearchAndReadInput
+
+    def _run(self, query: str, num_results: Optional[int] = None, max_chars: Optional[int] = None,
+             render_fallback: Optional[bool] = None, run_manager: Any = None) -> str:
+        try:
+            body: dict[str, Any] = {"query": query}
+            if num_results is not None:
+                body["num_results"] = num_results
+            if max_chars is not None:
+                body["max_chars"] = max_chars
+            if render_fallback is not None:
+                body["render_fallback"] = render_fallback
+            return c.dumps(c.call_portal("search_and_read", body))
+        except Exception as e:
+            return _err(e)

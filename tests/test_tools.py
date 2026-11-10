@@ -4,7 +4,7 @@ import os
 import httpx
 import pytest
 
-from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchTool, FREE_LIMIT_MESSAGE
+from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool, AgentSearchTool, FREE_LIMIT_MESSAGE
 from langchain_agentsearch import _client
 
 
@@ -57,8 +57,8 @@ def mock(monkeypatch, status, body):
 
 
 def test_names():
-    assert [t().name for t in (AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool)] == [
-        "agentsearch_search", "agentsearch_extract", "agentsearch_render"]
+    assert [t().name for t in (AgentSearchTool, AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool)] == [
+        "agentsearch_search", "agentsearch_extract", "agentsearch_render", "agentsearch_search_and_read"]
 
 
 def test_free_search_mocked(monkeypatch):

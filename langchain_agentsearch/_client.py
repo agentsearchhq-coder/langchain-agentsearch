@@ -48,8 +48,8 @@ DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT"
 ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE"
 DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com"
 DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337"
-DIRECT_MAX_PER_CALL_ATOMIC = 10_000  # $0.010 hard ceiling (search $0.008, extract $0.007, render $0.010)
-DIRECT_FIELDS = {"search": ("query", "max_results"), "extract": ("url",), "render": ("url",)}
+DIRECT_MAX_PER_CALL_ATOMIC = 20_000  # $0.020 hard ceiling (search $0.008, extract $0.007, render $0.010, search_and_read $0.015)
+DIRECT_FIELDS = {"search": ("query", "max_results"), "extract": ("url",), "render": ("url",), "search_and_read": ("query", "num_results", "max_results", "max_chars", "render_fallback")}
 
 
 def payment_route() -> str:
@@ -73,8 +73,8 @@ def direct_enabled() -> bool:
 
 
 PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own API (search $0.008, extract $0.007, "
-                   "render $0.010; $1 covers about 140 extracts; failed calls are not charged), or $0.005 per call through "
-                   "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket")
+                   "render $0.010, search_and_read $0.015; $1 covers about 140 extracts or 66 search-and-read calls; failed calls are not charged), or $0.005 per call through "
+                   "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only)")
 
 FREE_LIMIT_MESSAGE = (
     f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
@@ -356,6 +356,12 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     if not key:
         raise AgentSearchError(paid_only_message(f"agentsearch_{op}"))
     direct = direct_enabled()
+    if op == "search_and_read" and not direct:
+        raise AgentSearchError(
+            "agentsearch_search_and_read is available only on AgentSearch's own x402 API ($0.015 per call when at least one page returns text). "
+            "Unset AGENTSEARCH_PAYMENT_ROUTE=pocket (and AGENTSEARCH_X402_DIRECT=0) to use the default direct route. "
+            "Pocket does not offer this tool. Nothing was signed."
+        )
     url_env = "AGENTSEARCH_X402_DIRECT_URL" if direct else "AGENTSEARCH_PORTAL_URL"
     portal = (os.environ.get(url_env) or (DEFAULT_DIRECT_URL if direct else DEFAULT_PORTAL_URL)).strip().rstrip("/")
     if not portal.startswith("https://") and not re.match(r"http://(localhost|127\.)", portal):
@@ -364,7 +370,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     payee = DIRECT_PAYEE if direct else PORTAL_PAYEE
     session_cap = _atomic_env(("AGENTSEARCH_MAX_TOTAL_ATOMIC", "POCKET_MAX_TOTAL_ATOMIC"), DEFAULT_SESSION_CAP_ATOMIC)
     per_call = min(_atomic_env(("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"), hard_cap), hard_cap)
-    service_id, path = SERVICES[op]
+    service_id, path = (None, None) if op == "search_and_read" else SERVICES[op]
     dropped: list[str] = []
     if direct:
         url, expect_res = f"{portal}/x402/v1/{op}", f"/x402/v1/{op}"
@@ -403,8 +409,8 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
                 if direct and per_call < hard_cap and ceiling == per_call:
                     raise AgentSearchError(
                         f"{e} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC={per_call}) is below this route's price; since 0.5.0 "
-                        "paid calls go to AgentSearch's own x402 API (search $0.008, extract $0.007, render $0.010). Raise the cap "
-                        "to 10000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route."
+                        "paid calls go to AgentSearch's own x402 API (search $0.008, extract $0.007, render $0.010, search_and_read $0.015). Raise the cap "
+                        "to 20000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route (search, extract and render only)."
                     ) from None
                 raise
             amount = int(chosen.amount)
