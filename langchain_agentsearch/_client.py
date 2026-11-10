@@ -1,4 +1,5 @@
-"""HTTP layer: free relay search and x402 pay-per-call via the Pocket Network Agentic Portal.
+"""HTTP layer: free relay search and x402 pay-per-call via the Pocket Network Agentic Portal, or (opt-in,
+AGENTSEARCH_X402_DIRECT=1) directly via AgentSearch's own x402 API on Base.
 
 The wallet key is read from env, used only to sign, and never logged or returned.
 """
@@ -42,6 +43,17 @@ WALLET_SETUP = "https://agentsearchhq.com/wallet-setup?utm_source=langchain-agen
 # 0.3.0: no-wallet free trial of extract/render on the free relay (limits enforced server-side, per IP per UTC day).
 FREE_TRIAL_LIMITS = {"extract": 5, "render": 3}
 FREE_TRIAL_ENV_VAR = "AGENTSEARCH_FREE_TRIAL"
+# 0.4.0: opt-in direct x402 to AgentSearch's own API on Base (instead of the Pocket portal).
+DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT"
+DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com"
+DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337"
+DIRECT_MAX_PER_CALL_ATOMIC = 10_000  # $0.010 hard ceiling (search $0.008, extract $0.007, render $0.010)
+DIRECT_FIELDS = {"search": ("query", "max_results"), "extract": ("url",), "render": ("url",)}
+
+
+def direct_enabled() -> bool:
+    """AGENTSEARCH_X402_DIRECT=1/true/yes/on routes paid calls to AgentSearch's own x402 API. Default off."""
+    return (os.environ.get(DIRECT_ENV_VAR) or "").strip().lower() in ("1", "true", "yes", "on")
 
 FREE_LIMIT_MESSAGE = (
     f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
@@ -288,7 +300,7 @@ def _eq(a: Any, b: str) -> bool:
     return isinstance(a, str) and a.lower() == b.lower()
 
 
-def select_accept(accepts: list[Any], ceiling: int) -> Any:
+def select_accept(accepts: list[Any], ceiling: int, payee: str = PORTAL_PAYEE) -> Any:
     why = []
     for a in accepts or []:
         if a.scheme != "exact":
@@ -297,8 +309,8 @@ def select_accept(accepts: list[Any], ceiling: int) -> Any:
             why.append(f"network {a.network}"); continue
         if not _eq(a.asset, USDC_BASE):
             why.append(f"asset {a.asset} is not USDC on Base"); continue
-        if not _eq(a.pay_to, PORTAL_PAYEE):
-            why.append(f"payee {a.pay_to} is not the portal's"); continue
+        if not _eq(a.pay_to, payee):
+            why.append(f"payee {a.pay_to} is not {'AgentSearch' if payee == DIRECT_PAYEE else 'the portal'}'s"); continue
         if not str(a.amount).isdigit() or int(a.amount) <= 0:
             why.append(f"amount {a.amount}"); continue
         if int(a.amount) > ceiling:
@@ -322,19 +334,29 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     key = _read_wallet_key()
     if not key:
         raise AgentSearchError(paid_only_message(f"agentsearch_{op}"))
-    portal = (os.environ.get("AGENTSEARCH_PORTAL_URL") or DEFAULT_PORTAL_URL).strip().rstrip("/")
+    direct = direct_enabled()
+    url_env = "AGENTSEARCH_X402_DIRECT_URL" if direct else "AGENTSEARCH_PORTAL_URL"
+    portal = (os.environ.get(url_env) or (DEFAULT_DIRECT_URL if direct else DEFAULT_PORTAL_URL)).strip().rstrip("/")
     if not portal.startswith("https://") and not re.match(r"http://(localhost|127\.)", portal):
-        raise AgentSearchError("AGENTSEARCH_PORTAL_URL must be https://. Nothing was signed.")
+        raise AgentSearchError(f"{url_env} must be https://. Nothing was signed.")
+    hard_cap = DIRECT_MAX_PER_CALL_ATOMIC if direct else MAX_PER_CALL_ATOMIC
+    payee = DIRECT_PAYEE if direct else PORTAL_PAYEE
     session_cap = _atomic_env(("AGENTSEARCH_MAX_TOTAL_ATOMIC", "POCKET_MAX_TOTAL_ATOMIC"), DEFAULT_SESSION_CAP_ATOMIC)
-    per_call = min(_atomic_env(("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"), MAX_PER_CALL_ATOMIC), MAX_PER_CALL_ATOMIC)
+    per_call = min(_atomic_env(("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"), hard_cap), hard_cap)
     service_id, path = SERVICES[op]
-    url = f"{portal}/v1/{service_id}{path}"
+    dropped: list[str] = []
+    if direct:
+        url, expect_res = f"{portal}/x402/v1/{op}", f"/x402/v1/{op}"
+        dropped = [k for k, v in body.items() if v is not None and k not in DIRECT_FIELDS[op]]
+        body = {k: v for k, v in body.items() if v is not None and k in DIRECT_FIELDS[op]}
+    else:
+        url, expect_res = f"{portal}/v1/{service_id}{path}", f"/v1/{service_id}"
 
     c = client or httpx.Client(timeout=timeout_s())
     try:
         unpaid = c.post(url, json=body, headers=client_headers())
         if unpaid.status_code != 402:
-            raise AgentSearchError(f"Expected 402 from the portal, got {unpaid.status_code}: {unpaid.text[:300]}. Nothing was signed.", unpaid.status_code)
+            raise AgentSearchError(f"Expected 402 from {'AgentSearch' if direct else 'the portal'}, got {unpaid.status_code}: {unpaid.text[:300]}. Nothing was signed.", unpaid.status_code)
         http = x402HTTPClientSync(x402ClientSync())
         try:
             required = http.get_payment_required_response(lambda n: unpaid.headers.get(n), unpaid.content)
@@ -343,8 +365,8 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
         if getattr(required, "x402_version", None) != 2:
             raise AgentSearchError("Unsupported x402 version. Nothing was signed.")
         res_url = (getattr(getattr(required, "resource", None), "url", "") or "").rstrip("/")
-        if not res_url.endswith(f"/v1/{service_id}"):
-            raise AgentSearchError(f"The 402 is for resource {res_url}, not {service_id}. Nothing was signed.")
+        if not res_url.endswith(expect_res):
+            raise AgentSearchError(f"The 402 is for resource {res_url}, not {expect_res}. Nothing was signed.")
 
         with _budget.lock:
             remaining = max(session_cap - _budget.spent, 0)
@@ -354,7 +376,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
                     f"Session spend cap reached: {usd(_budget.spent)} of {usd(session_cap)} signed. "
                     "Raise AGENTSEARCH_MAX_TOTAL_ATOMIC to spend more. Nothing was signed."
                 )
-            chosen = select_accept(list(required.accepts), ceiling)
+            chosen = select_accept(list(required.accepts), ceiling, payee)
             amount = int(chosen.amount)
 
             def selector(_v: int, options: list[Any]) -> Any:
@@ -368,7 +390,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
             payer = x402HTTPClientSync(signer_client)
             signed = payer.create_payment_payload(required)
             auth = (signed.payload or {}).get("authorization") or {}
-            if not _eq(auth.get("to"), PORTAL_PAYEE) or int(auth.get("value", 0)) != amount:
+            if not _eq(auth.get("to"), payee) or int(auth.get("value", 0)) != amount:
                 raise AgentSearchError("The signed authorization does not match the approved terms; it was discarded and not sent.")
             _budget.spent += amount  # counted at signing
 
@@ -378,7 +400,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
             raise AgentSearchError(f"A payment of {usd(amount)} was signed but the paid request failed ({e}). Check the wallet before retrying.")
         if not 200 <= paid.status_code < 300:
             raise AgentSearchError(
-                f"The portal answered {paid.status_code}: {paid.text[:300]}. Non-2xx answers are not settled; "
+                f"{'AgentSearch' if direct else 'The portal'} answered {paid.status_code}: {paid.text[:300]}. Non-2xx answers are not settled; "
                 f"the signed {usd(amount)} still counts against this session's cap.", paid.status_code)
         receipt = None
         try:
@@ -388,9 +410,13 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
         tx = getattr(receipt, "transaction", None) if receipt else None
         payment = {
             "amountAtomic": str(amount), "amountUsd": usd(amount), "asset": "USDC", "network": BASE_NETWORK,
-            "payTo": PORTAL_PAYEE, "payer": account.address, "serviceId": service_id,
+            "payTo": payee, "payer": account.address, "serviceId": service_id,
             "settled": bool(getattr(receipt, "success", False)), "transaction": tx,
         }
+        if direct:
+            payment["rail"] = "agentsearch-x402-direct"
+        if dropped:
+            payment["droppedFields"] = dropped
         if tx:
             payment["explorer"] = f"https://basescan.org/tx/{tx}"
         try:

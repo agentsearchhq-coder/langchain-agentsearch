@@ -69,6 +69,18 @@ Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private
 
 Limits are checked before anything is signed. The key is never logged or returned. Paid results include a `payment` object.
 
+### Direct x402 (0.4.0, opt-in)
+
+AgentSearch also runs its own x402 API on Base mainnet (`https://api.agentsearchhq.com`). With the `[paid]` extra and a wallet key, set `AGENTSEARCH_X402_DIRECT=1` and paid calls go straight to it instead of the Pocket portal: extract **$0.007**, render **$0.010**, search **$0.008** (search is still paid only with `mode="paid"` or `AGENTSEARCH_MODE=paid`).
+
+```bash
+pip install 'langchain-agentsearch[paid]'
+export AGENTSEARCH_WALLET_PRIVATE_KEY=0x...   # a NEW wallet holding a little USDC on Base
+export AGENTSEARCH_X402_DIRECT=1
+```
+
+Signs only the `exact` scheme, USDC on Base, to AgentSearch's payee `0xC49B157887e51c21CB655f39CF65D6a4c2a4C337`, at most $0.010 per call (lower with `AGENTSEARCH_MAX_PER_CALL_ATOMIC`) and `AGENTSEARCH_MAX_TOTAL_ATOMIC` per session (default $1.00). The API settles only after a successful answer. Direct extract/render take only `url` (other options are dropped and listed in `payment.droppedFields`). Without the variable nothing changes. Docs: https://agentsearchhq.com/docs/x402
+
 ## Errors
 
 Tools return `"Error: ..."` strings rather than raising. A 429 from the free relay means the daily limit was hit; the message explains how to upgrade.
