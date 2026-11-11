@@ -66,7 +66,7 @@ class SearchAndReadInput(BaseModel):
     query: str = Field(default="", description="Search query (non-empty)")
     num_results: Optional[int] = Field(default=None, description="How many top results to read, default 3, max 5")
     max_chars: Optional[int] = Field(default=None, gt=0, le=20000, description="Max characters of page text per result, default 8000, max 20000")
-    render_fallback: Optional[bool] = Field(default=None, description="If extract is thin, render at most one page in the same $0.015 call")
+    render_fallback: Optional[bool] = Field(default=None, description="If extract is thin, render at most one page in the same $0.009 call")
 
     @model_validator(mode="before")
     @classmethod
@@ -133,7 +133,7 @@ class _PaidTool(BaseTool):
 
 class AgentSearchExtractTool(_PaidTool):
     name: str = "agentsearch_extract"
-    description: str = "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, or pass render_fallback=true to do that automatically (a second paid call, $0.010). No wallet: free trial, 5 calls/day per IP. With a wallet: $0.007 per call (USDC on Base via x402 to AgentSearch's API)."
+    description: str = "Fetch a URL and return its main content as clean text/markdown. Fast and best for articles, docs and static pages. If the result is empty or thin (JavaScript-heavy page, SPA, app shell), call agentsearch_render on the same URL, or pass render_fallback=true to do that automatically (a second paid call, $0.010). No wallet: free trial, 5 calls/day per IP. With a wallet: $0.004 per call (USDC on Base via x402 to AgentSearch's API)."
     args_schema: Type[BaseModel] = ExtractInput
     op: str = "extract"
 
@@ -146,12 +146,12 @@ class AgentSearchRenderTool(_PaidTool):
 
 
 class AgentSearchSearchAndReadTool(BaseTool):
-    """Search the live web and read the top pages in one paid call on AgentSearch's direct x402 API ($0.015 when at least one page returns text). Direct only — not on Pocket, not on the free relay."""
+    """Search the live web and read the top pages in one paid call on AgentSearch's direct x402 API ($0.009 when at least one page returns text). Direct only — not on Pocket, not on the free relay."""
 
     name: str = "agentsearch_search_and_read"
     description: str = (
-        "Search the live web and return the top results with each page's main text in one paid call ($0.015 USDC on Base, charged only when at least one page returns text). "
-        "Cheaper than a $0.008 search plus three $0.007 extracts ($0.029) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). "
+        "Search the live web and return the top results with each page's main text in one paid call ($0.009 USDC on Base, charged only when at least one page returns text). "
+        "Cheaper than a $0.008 search plus three $0.004 extracts ($0.020) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). "
         "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket or the free relay. Search itself stays free by default."
     )
     args_schema: Type[BaseModel] = SearchAndReadInput

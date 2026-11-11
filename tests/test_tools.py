@@ -39,7 +39,7 @@ def test_resolve_search_mode(monkeypatch):
 
 
 def test_messages_point_to_extract():
-    assert "agentsearch_extract" in FREE_LIMIT_MESSAGE and "140 calls" in FREE_LIMIT_MESSAGE
+    assert "agentsearch_extract" in FREE_LIMIT_MESSAGE and "250 calls" in FREE_LIMIT_MESSAGE
     assert "nothing was charged" in _client.paid_only_message("agentsearch_extract")
 
 

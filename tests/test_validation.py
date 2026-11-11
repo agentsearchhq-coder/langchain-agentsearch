@@ -137,7 +137,7 @@ def test_check_count():
 
 
 def test_descriptions_have_direct_prices():
-    assert "$0.007" in AgentSearchExtractTool().description and "$0.005" not in AgentSearchExtractTool().description
+    assert "$0.004" in AgentSearchExtractTool().description and "$0.005" not in AgentSearchExtractTool().description
     assert "$0.010" in AgentSearchRenderTool().description and "$0.005" not in AgentSearchRenderTool().description
     assert "$0.008" in AgentSearchTool().description and "Free" in AgentSearchTool().description
-    assert "$0.015" in AgentSearchSearchAndReadTool().description
+    assert "$0.009" in AgentSearchSearchAndReadTool().description
