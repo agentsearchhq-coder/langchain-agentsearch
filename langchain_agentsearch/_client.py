@@ -48,8 +48,16 @@ DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT"
 ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE"
 DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com"
 DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337"
-DIRECT_MAX_PER_CALL_ATOMIC = 20_000  # $0.020 hard ceiling (search $0.008, extract $0.004, render $0.010, search_and_read $0.009)
-DIRECT_FIELDS = {"search": ("query", "max_results"), "extract": ("url",), "render": ("url",), "search_and_read": ("query", "num_results", "max_results", "max_chars", "render_fallback")}
+DIRECT_MAX_PER_CALL_ATOMIC = 20_000  # $0.020 hard ceiling (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009)
+# 0.7.0: optional search filters (direct only) on search, news and search_and_read.
+FILTER_KEYS = ("freshness", "date_from", "date_to", "country", "language", "include_domains", "exclude_domains")
+DIRECT_FIELDS = {"search": ("query", "max_results") + FILTER_KEYS, "news": ("query", "max_results") + FILTER_KEYS,
+                 "extract": ("url", "max_chars", "include_links"), "render": ("url",),
+                 "screenshot": ("url", "format", "full_page", "viewport"),
+                 "search_and_read": ("query", "num_results", "max_results", "max_chars", "render_fallback") + FILTER_KEYS}
+# Tools that exist only on AgentSearch's own x402 API (not on Pocket, not on the free relay).
+DIRECT_ONLY = {"search_and_read": "$0.009 per call when at least one page returns text",
+               "news": "$0.008 per call", "screenshot": "$0.010 per call"}
 
 
 def payment_route() -> str:
@@ -73,7 +81,7 @@ def direct_enabled() -> bool:
 
 
 PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own API (search $0.008, extract $0.004, "
-                   "render $0.010, search_and_read $0.009; $1 covers about 250 extracts or 66 search-and-read calls; failed calls are not charged), or $0.005 per call through "
+                   "render $0.010, search_and_read $0.009, news $0.008, screenshot $0.010; $1 covers about 250 extracts or 111 search-and-read calls; failed calls are not charged), or $0.005 per call through "
                    "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only)")
 
 FREE_LIMIT_MESSAGE = (
@@ -356,9 +364,10 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     if not key:
         raise AgentSearchError(paid_only_message(f"agentsearch_{op}"))
     direct = direct_enabled()
-    if op == "search_and_read" and not direct:
+    if op in DIRECT_ONLY and not direct:
+        tool = "agentsearch_news_search" if op == "news" else f"agentsearch_{op}"
         raise AgentSearchError(
-            "agentsearch_search_and_read is available only on AgentSearch's own x402 API ($0.009 per call when at least one page returns text). "
+            f"{tool} is available only on AgentSearch's own x402 API ({DIRECT_ONLY[op]}). "
             "Unset AGENTSEARCH_PAYMENT_ROUTE=pocket (and AGENTSEARCH_X402_DIRECT=0) to use the default direct route. "
             "Pocket does not offer this tool. Nothing was signed."
         )
@@ -370,7 +379,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
     payee = DIRECT_PAYEE if direct else PORTAL_PAYEE
     session_cap = _atomic_env(("AGENTSEARCH_MAX_TOTAL_ATOMIC", "POCKET_MAX_TOTAL_ATOMIC"), DEFAULT_SESSION_CAP_ATOMIC)
     per_call = min(_atomic_env(("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "POCKET_MAX_PER_CALL_ATOMIC"), hard_cap), hard_cap)
-    service_id, path = (None, None) if op == "search_and_read" else SERVICES[op]
+    service_id, path = (None, None) if op in DIRECT_ONLY else SERVICES[op]
     dropped: list[str] = []
     if direct:
         url, expect_res = f"{portal}/x402/v1/{op}", f"/x402/v1/{op}"
@@ -409,7 +418,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
                 if direct and per_call < hard_cap and ceiling == per_call:
                     raise AgentSearchError(
                         f"{e} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC={per_call}) is below this route's price; since 0.5.0 "
-                        "paid calls go to AgentSearch's own x402 API (search $0.008, extract $0.004, render $0.010, search_and_read $0.009). Raise the cap "
+                        "paid calls go to AgentSearch's own x402 API (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009). Raise the cap "
                         "to 20000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route (search, extract and render only)."
                     ) from None
                 raise

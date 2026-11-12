@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-agentsearch"
-version = "0.6.1"
-description = "LangChain tools for AgentSearch: free live web search with no API key, plus extract, JS render and search-and-read paid per call in USDC on Base via x402"
+version = "0.7.0"
+description = "LangChain tools for AgentSearch: free live web search with no API key, plus news search, extract, JS render, screenshots and search-and-read paid per call in USDC on Base via x402"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
@@ -25,7 +25,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = ["langchain-core>=0.3.0,<2.0.0", "httpx>=0.25", "pydantic>=2"]
-keywords = ["langchain", "langgraph", "agentsearch", "web-search", "search", "extract", "web-scraping", "tools", "agents", "llm", "rag", "x402"]
+keywords = ["langchain", "langgraph", "agentsearch", "web-search", "search", "extract", "web-scraping", "tools", "agents", "llm", "rag", "x402", "news-search", "screenshot"]
 
 [project.optional-dependencies]
 paid = ["x402[evm]>=2.0"]

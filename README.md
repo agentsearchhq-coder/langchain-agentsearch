@@ -8,8 +8,10 @@ LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source
 | `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.004/call (USDC on Base via x402, paid to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Free trial without a wallet (3/day per IP, no screenshots), then $0.010/call (headless browser for JS pages) |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | $0.009/call with a wallet: search + the top pages' main text in one call, charged only when at least one page returns text (direct x402 only, no free tier) |
+| `AgentSearchNewsTool` | `agentsearch_news_search` | $0.008/call with a wallet: recent news articles with publish dates and sources, 1-10 per call, optional freshness/date range, country, language and domain filters (direct x402 only) |
+| `AgentSearchScreenshotTool` | `agentsearch_screenshot` | $0.010/call with a wallet: PNG/JPEG screenshot of any public page (viewport or full page, desktop or mobile viewport); the image is returned as the tool artifact (direct x402 only) |
 
-Paid prices (USDC on Base via x402, straight to AgentSearch's own API, charged only on success): search $0.008, extract $0.004, render $0.010, search-and-read $0.009. Free search through the free relay stays free.
+Paid prices (USDC on Base via x402, straight to AgentSearch's own API, charged only on success): search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search-and-read $0.009. Paid search, news and search-and-read accept `freshness`, `date_from`/`date_to`, `country`, `language` and `include_domains`/`exclude_domains`. Free search through the free relay stays free.
 
 ## Install
 

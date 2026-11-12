@@ -7,13 +7,14 @@ import os
 import httpx
 import pytest
 
-from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool, AgentSearchTool
+from langchain_agentsearch import (AgentSearchExtractTool, AgentSearchNewsTool, AgentSearchRenderTool, AgentSearchScreenshotTool,
+                                   AgentSearchSearchAndReadTool, AgentSearchTool)
 from langchain_agentsearch import _client
 
 pytest.importorskip("x402")
 from eth_account import Account  # noqa: E402
 
-PRICES = {"search": "8000", "extract": "4000", "render": "10000", "search_and_read": "9000"}
+PRICES = {"search": "8000", "extract": "4000", "render": "10000", "search_and_read": "9000", "news": "8000", "screenshot": "10000"}
 API = "https://api.agentsearchhq.com"
 _REAL_CLIENT = httpx.Client
 
@@ -33,7 +34,7 @@ def terms(op, **over):
                          "payTo": _client.DIRECT_PAYEE, "maxTimeoutSeconds": 300, "extra": {"name": "USD Coin", "version": "2"}, **over}]}
 
 
-def mock_api(monkeypatch, op, over=None, paid_status=200):
+def mock_api(monkeypatch, op, over=None, paid_status=200, resp=None):
     seen = {"calls": []}
 
     def handler(req):
@@ -45,7 +46,7 @@ def mock_api(monkeypatch, op, over=None, paid_status=200):
         seen["signed"] = json.loads(base64.b64decode(sig))
         rcpt = base64.b64encode(json.dumps({"success": True, "transaction": "0x" + "cd" * 32, "network": "eip155:8453",
                                             "payer": seen["signed"]["payload"]["authorization"]["from"]}).encode()).decode()
-        return httpx.Response(paid_status, json={"markdown": "x" * 300, "ok": op}, headers={"PAYMENT-RESPONSE": rcpt})
+        return httpx.Response(paid_status, json=resp or {"markdown": "x" * 300, "ok": op}, headers={"PAYMENT-RESPONSE": rcpt})
 
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: _REAL_CLIENT(transport=httpx.MockTransport(handler)))
     return seen
@@ -178,3 +179,50 @@ def test_search_and_read_no_key_is_not_on_free_relay(monkeypatch):
     out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
     assert "No wallet is configured" in out or "no wallet" in out.lower()
     assert "Nothing was signed" in out or "no call was made" in out.lower()
+
+
+# 0.7.0: news search, screenshot, filters, extract max_chars/include_links
+
+def test_news_goes_direct_with_filters(monkeypatch):
+    seen = mock_api(monkeypatch, "news")
+    out = json.loads(AgentSearchNewsTool().invoke({"query": "x402", "max_results": 8, "freshness": "week", "country": "us"}))
+    assert seen["calls"][0]["url"] == f"{API}/x402/v1/news"
+    assert seen["calls"][1]["body"] == {"query": "x402", "max_results": 8, "freshness": "week", "country": "us"}
+    assert out["payment"]["amountAtomic"] == "8000" and out["payment"]["serviceId"] is None
+
+
+def test_news_clamps_count_to_10(monkeypatch):
+    seen = mock_api(monkeypatch, "news")
+    AgentSearchNewsTool().invoke({"query": "x", "max_results": 50})
+    assert seen["calls"][1]["body"]["max_results"] == 10
+
+
+@pytest.mark.parametrize("tool,args", [(AgentSearchNewsTool, {"query": "q"}), (AgentSearchScreenshotTool, {"url": "https://example.com"})])
+def test_news_and_screenshot_are_direct_only(monkeypatch, tool, args):
+    monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
+    out = tool().invoke(args)
+    assert "own x402 API" in out and "Nothing was signed" in out
+
+
+def test_screenshot_keeps_base64_out_of_text(monkeypatch):
+    shot = {"format": "png", "width": 390, "height": 844, "bytes": 12, "base64": "iVBORw0KGgo="}
+    seen = mock_api(monkeypatch, "screenshot", resp={"url": "https://example.com/", "screenshot": shot})
+    msg = AgentSearchScreenshotTool().invoke({"type": "tool_call", "id": "t1", "name": "agentsearch_screenshot",
+                                             "args": {"url": "https://example.com", "viewport": {"width": 390, "height": 844}, "foo": 1}})
+    assert seen["calls"][1]["body"] == {"url": "https://example.com", "viewport": {"width": 390, "height": 844}}
+    assert "iVBORw0KGgo=" not in msg.content and "artifact" in msg.content
+    assert msg.artifact["screenshot"]["base64"] == "iVBORw0KGgo=" and msg.artifact["payment"]["amountAtomic"] == "10000"
+
+
+def test_paid_search_forwards_filters_free_search_does_not_need_them(monkeypatch):
+    seen = mock_api(monkeypatch, "search")
+    AgentSearchTool(mode="paid").invoke({"query": "q", "include_domains": ["example.com"], "language": "en"})
+    assert seen["calls"][1]["body"] == {"query": "q", "include_domains": ["example.com"], "language": "en"}
+
+
+def test_extract_forwards_max_chars_and_include_links_on_direct(monkeypatch):
+    seen = mock_api(monkeypatch, "extract")
+    out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com", "max_chars": 500, "include_links": False, "formats": ["markdown"]}))
+    assert seen["calls"][1]["body"] == {"url": "https://example.com", "max_chars": 500, "include_links": False}
+    assert out["payment"]["droppedFields"] == ["formats"]

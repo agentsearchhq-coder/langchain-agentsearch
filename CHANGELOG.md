@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0 (2026-11-12)
+- **News search.** New `AgentSearchNewsTool` (`agentsearch_news_search`): recent news articles (title, URL, snippet, source domain, publish date), 1-10 per call, at **$0.008** via `https://api.agentsearchhq.com/x402/v1/news`; calls with no results are not charged.
+- **Website screenshots.** New `AgentSearchScreenshotTool` (`agentsearch_screenshot`): PNG or JPEG of the viewport or full page (up to 4000 px tall) in headless Chromium, with optional viewport (e.g. 390x844 for mobile), at **$0.010**. Uses LangChain's `content_and_artifact` format: the model sees title, URL, status and image size, and the base64 image goes to `ToolMessage.artifact` so it doesn't burn tokens.
+- **Search filters** on paid search, news and search-and-read: `freshness` (day/week/month/year) or `date_from`/`date_to`, `country`, `language`, `include_domains`/`exclude_domains` (up to 5 each). Free search ignores them.
+- Extract now forwards `max_chars` (up to 50000) and `include_links` on the direct route (0.6.x dropped them).
+- **Lower direct prices:** extract **$0.004** (was $0.007) and search-and-read **$0.009** (was $0.015). Search $0.008 and render $0.010 unchanged. News, screenshot and search-and-read are direct-only (not on Pocket or the free relay); a Pocket-route call refuses with nothing signed. Matches `@agentsearchhq/agentsearch-mcp` 1.8.0.
+
 ## 0.6.1 (2026-11-10)
 - **Input checks before any request.** An empty or whitespace-only `query`, a missing/invalid URL (not http/https, no host, embedded credentials, localhost, private/loopback/link-local IPs, single-label or `.local`/`.internal` hosts) or a non-numeric count returns an `Error: ...` string with no HTTP call, so it never counts against the free relay's per-IP limits and nothing is signed. Queries are trimmed (max 400 chars); URLs are trimmed.
 - `max_results: null` means the default; out-of-range `max_results`/`num_results` are clamped to 1-5 instead of failing schema validation. Schema type errors now come back as an `Error: ...` string instead of raising.
