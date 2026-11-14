@@ -7,6 +7,7 @@ from typing import Any, Optional
 from urllib.parse import urlsplit
 
 MAX_QUERY_CHARS = 400
+MIN_QUERY_CHARS = 2
 _BLOCKED_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home", ".corp", ".intranet", ".localdomain", ".home.arpa")
 
 
@@ -20,6 +21,8 @@ def check_query(query: Any) -> str:
     q = query.strip()
     if not q:
         raise InvalidInput("query is empty or whitespace-only: pass a non-empty search string. Nothing was sent or charged.")
+    if len(q) < MIN_QUERY_CHARS:
+        raise InvalidInput(f"query {q!r} is too short (minimum {MIN_QUERY_CHARS} characters): rewrite it as a real search query, e.g. a few keywords. Don't retry it unchanged. Nothing was sent or charged.")
     if len(q) > MAX_QUERY_CHARS:
         raise InvalidInput(f"query is {len(q)} characters; keep it under {MAX_QUERY_CHARS} (a short keyword query works best). Nothing was sent or charged.")
     return q

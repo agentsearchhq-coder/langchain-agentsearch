@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1 (2026-11-14)
+- Queries shorter than 2 characters (after trimming) now return an `Error: ...` string with no HTTP call, so they never count against the free relay's per-IP limits. The free relay rejects them with HTTP 400 anyway.
+- Free-relay 4xx errors now tell the agent to fix the input instead of retrying it unchanged. Matches `@agentsearchhq/agentsearch-mcp` 1.8.1 and `@agentsearchhq/ai-sdk` 0.1.1.
+
 ## 0.7.0 (2026-11-12)
 - **News search.** New `AgentSearchNewsTool` (`agentsearch_news_search`): recent news articles (title, URL, snippet, source domain, publish date), 1-10 per call, at **$0.008** via `https://api.agentsearchhq.com/x402/v1/news`; calls with no results are not charged.
 - **Website screenshots.** New `AgentSearchScreenshotTool` (`agentsearch_screenshot`): PNG or JPEG of the viewport or full page (up to 4000 px tall) in headless Chromium, with optional viewport (e.g. 390x844 for mobile), at **$0.010**. Uses LangChain's `content_and_artifact` format: the model sees title, URL, status and image size, and the base64 image goes to `ToolMessage.artifact` so it doesn't burn tokens.

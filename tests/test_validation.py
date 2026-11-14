@@ -58,31 +58,31 @@ def test_string_input(net):
 
 
 def test_max_results_null_is_default(net):
-    AgentSearchTool().invoke({"query": "x", "max_results": None})
-    assert net[0]["body"] == {"query": "x"}
+    AgentSearchTool().invoke({"query": "xy", "max_results": None})
+    assert net[0]["body"] == {"query": "xy"}
 
 
 def test_max_results_clamped(net):
-    AgentSearchTool().invoke({"query": "x", "max_results": 50})
-    AgentSearchTool().invoke({"query": "x", "max_results": 0})
+    AgentSearchTool().invoke({"query": "xy", "max_results": 50})
+    AgentSearchTool().invoke({"query": "xy", "max_results": 0})
     assert [c["body"]["max_results"] for c in net] == [5, 1]
 
 
-@pytest.mark.parametrize("args", [{"q": "x"}, {"input": "x"}, {"query": None, "q": "x"}])
+@pytest.mark.parametrize("args", [{"q": "xy"}, {"input": "xy"}, {"query": None, "q": "xy"}])
 def test_query_aliases(net, args):
     out = AgentSearchTool().invoke(args)
     assert not out.startswith("Error"), out
-    assert net[0]["body"]["query"] == "x"
+    assert net[0]["body"]["query"] == "xy"
 
 
 @pytest.mark.parametrize("k", ["num_results", "k"])
 def test_count_aliases(net, k):
-    AgentSearchTool().invoke({"query": "x", k: 2})
-    assert net[0]["body"] == {"query": "x", "max_results": 2}
+    AgentSearchTool().invoke({"query": "xy", k: 2})
+    assert net[0]["body"] == {"query": "xy", "max_results": 2}
 
 
 def test_bad_type_returns_error_string(net):
-    out = AgentSearchTool().invoke({"query": "x", "max_results": "lots"})
+    out = AgentSearchTool().invoke({"query": "xy", "max_results": "lots"})
     assert out.startswith("Error: ")
     assert net == []
 
@@ -125,8 +125,8 @@ def test_search_and_read_validates_before_signing(net, monkeypatch):
     monkeypatch.setattr(_client, "call_portal", lambda op, body, client=None: called.append(body) or {"ok": True})
     assert AgentSearchSearchAndReadTool().invoke({"query": "  "}).startswith("Error: ")
     assert called == [] and net == []
-    AgentSearchSearchAndReadTool().invoke({"q": "x", "max_results": 9})
-    assert called == [{"query": "x", "num_results": 5}]
+    AgentSearchSearchAndReadTool().invoke({"q": "xy", "max_results": 9})
+    assert called == [{"query": "xy", "num_results": 5}]
 
 
 def test_check_count():
@@ -141,3 +141,10 @@ def test_descriptions_have_direct_prices():
     assert "$0.010" in AgentSearchRenderTool().description and "$0.005" not in AgentSearchRenderTool().description
     assert "$0.008" in AgentSearchTool().description and "Free" in AgentSearchTool().description
     assert "$0.009" in AgentSearchSearchAndReadTool().description
+
+
+@pytest.mark.parametrize("q", ["a", " b ", "?"])
+def test_one_char_query_no_http(net, q):
+    out = AgentSearchTool().invoke({"query": q})
+    assert out.startswith("Error: ") and "too short" in out
+    assert net == []

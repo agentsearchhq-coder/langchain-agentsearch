@@ -102,11 +102,11 @@ def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
     # 0.5.0: no env needed, direct is the default paid route.
     seen = mock_api(monkeypatch, op)
     if op == "search":
-        out = json.loads(AgentSearchTool(mode="paid").invoke({"query": "q", "max_results": 3}))
+        out = json.loads(AgentSearchTool(mode="paid").invoke({"query": "qq", "max_results": 3}))
     elif op == "extract":
         out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
     elif op == "search_and_read":
-        out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "q", "num_results": 3}))
+        out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "qq", "num_results": 3}))
     else:
         out = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com", "formats": ["markdown"]}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/{op}"
@@ -160,14 +160,14 @@ def test_e2e_against_local_mock(monkeypatch):
 def test_search_and_read_is_direct_only(monkeypatch):
     monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
-    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
     assert "own x402 API" in out and "Nothing was signed" in out and "Pocket" in out
 
 
 def test_search_and_read_old_cap_needs_20000(monkeypatch):
     monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "8000")
     seen = mock_api(monkeypatch, "search_and_read")
-    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
     assert "to 20000" in out and "Nothing was signed" in out
     assert all(c["sig"] is None for c in seen["calls"])
 
@@ -176,7 +176,7 @@ def test_search_and_read_no_key_is_not_on_free_relay(monkeypatch):
     for k in _client.KEY_ENV_VARS:
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
-    out = AgentSearchSearchAndReadTool().invoke({"query": "q"})
+    out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
     assert "No wallet is configured" in out or "no wallet" in out.lower()
     assert "Nothing was signed" in out or "no call was made" in out.lower()
 
@@ -193,11 +193,11 @@ def test_news_goes_direct_with_filters(monkeypatch):
 
 def test_news_clamps_count_to_10(monkeypatch):
     seen = mock_api(monkeypatch, "news")
-    AgentSearchNewsTool().invoke({"query": "x", "max_results": 50})
+    AgentSearchNewsTool().invoke({"query": "xy", "max_results": 50})
     assert seen["calls"][1]["body"]["max_results"] == 10
 
 
-@pytest.mark.parametrize("tool,args", [(AgentSearchNewsTool, {"query": "q"}), (AgentSearchScreenshotTool, {"url": "https://example.com"})])
+@pytest.mark.parametrize("tool,args", [(AgentSearchNewsTool, {"query": "qq"}), (AgentSearchScreenshotTool, {"url": "https://example.com"})])
 def test_news_and_screenshot_are_direct_only(monkeypatch, tool, args):
     monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
@@ -217,8 +217,8 @@ def test_screenshot_keeps_base64_out_of_text(monkeypatch):
 
 def test_paid_search_forwards_filters_free_search_does_not_need_them(monkeypatch):
     seen = mock_api(monkeypatch, "search")
-    AgentSearchTool(mode="paid").invoke({"query": "q", "include_domains": ["example.com"], "language": "en"})
-    assert seen["calls"][1]["body"] == {"query": "q", "include_domains": ["example.com"], "language": "en"}
+    AgentSearchTool(mode="paid").invoke({"query": "qq", "include_domains": ["example.com"], "language": "en"})
+    assert seen["calls"][1]["body"] == {"query": "qq", "include_domains": ["example.com"], "language": "en"}
 
 
 def test_extract_forwards_max_chars_and_include_links_on_direct(monkeypatch):

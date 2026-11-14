@@ -23,7 +23,7 @@ def test_wallet_key_alone_keeps_search_free(monkeypatch):
     """0.2.1: a wallet key enables extract/render but never switches search to paid on its own."""
     monkeypatch.setenv("AGENTSEARCH_WALLET_PRIVATE_KEY", "11" * 32)
     seen = mock(monkeypatch, 200, {"results": []})
-    AgentSearchTool().invoke({"query": "x"})
+    AgentSearchTool().invoke({"query": "xy"})
     assert seen["url"] == "https://relay.agentsearchhq.com/v1/search"
 
 
@@ -63,15 +63,15 @@ def test_names():
 
 def test_free_search_mocked(monkeypatch):
     seen = mock(monkeypatch, 200, {"provider": "p", "results": [{"title": "T", "url": "https://a"}]})
-    out = json.loads(AgentSearchTool().invoke({"query": "x", "max_results": 1}))
+    out = json.loads(AgentSearchTool().invoke({"query": "xy", "max_results": 1}))
     assert seen["url"] == "https://relay.agentsearchhq.com/v1/search"
-    assert seen["body"] == {"query": "x", "max_results": 1}
+    assert seen["body"] == {"query": "xy", "max_results": 1}
     assert "provider" not in out and out["results"][0]["title"] == "T"
 
 
 def test_429(monkeypatch):
     mock(monkeypatch, 429, {})
-    assert AgentSearchTool().invoke({"query": "x"}) == f"Error: {FREE_LIMIT_MESSAGE}"
+    assert AgentSearchTool().invoke({"query": "xy"}) == f"Error: {FREE_LIMIT_MESSAGE}"
 
 
 def test_paid_without_wallet_trial_off(monkeypatch):
@@ -97,7 +97,7 @@ def test_select_accept_caps():
 
 def test_tool_call_message(monkeypatch):
     mock(monkeypatch, 200, {"results": []})
-    msg = AgentSearchTool().invoke({"type": "tool_call", "id": "1", "name": "agentsearch_search", "args": {"query": "x"}})
+    msg = AgentSearchTool().invoke({"type": "tool_call", "id": "1", "name": "agentsearch_search", "args": {"query": "xy"}})
     assert msg.tool_call_id == "1"
 
 

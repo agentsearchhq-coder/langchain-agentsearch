@@ -177,7 +177,8 @@ def free_search(query: str, max_results: Optional[int] = None, client: Optional[
     if r.status_code == 429:
         raise AgentSearchError(FREE_LIMIT_MESSAGE, 429)
     if r.status_code >= 400:
-        raise AgentSearchError(f"AgentSearch relay HTTP {r.status_code}: {r.text[:500]}", r.status_code)
+        hint = " This is an input error: fix the query instead of retrying it unchanged." if 400 <= r.status_code < 500 else ""
+        raise AgentSearchError(f"AgentSearch relay HTTP {r.status_code}: {r.text[:500]}{hint}", r.status_code)
     try:
         return _strip_provider(r.json())
     except ValueError:
