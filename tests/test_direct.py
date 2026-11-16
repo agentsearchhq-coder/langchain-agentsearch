@@ -14,7 +14,7 @@ from langchain_agentsearch import _client
 pytest.importorskip("x402")
 from eth_account import Account  # noqa: E402
 
-PRICES = {"search": "8000", "extract": "4000", "render": "10000", "search_and_read": "9000", "news": "8000", "screenshot": "10000"}
+PRICES = {"search": "3000", "extract": "2000", "render": "5000", "search_and_read": "5000", "news": "3000", "screenshot": "4000"}
 API = "https://api.agentsearchhq.com"
 _REAL_CLIENT = httpx.Client
 
@@ -79,7 +79,7 @@ def test_default_extract_reaches_direct_api(monkeypatch):
     seen = mock_api(monkeypatch, "extract")
     out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/extract"
-    assert out["payment"]["payTo"] == _client.DIRECT_PAYEE and out["payment"]["amountAtomic"] == "4000"
+    assert out["payment"]["payTo"] == _client.DIRECT_PAYEE and out["payment"]["amountAtomic"] == "2000"
 
 
 def test_invalid_route_refuses(monkeypatch):
@@ -90,7 +90,7 @@ def test_invalid_route_refuses(monkeypatch):
 
 
 def test_old_pocket_per_call_cap_gets_hint(monkeypatch):
-    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "5000")
+    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "4000")
     seen = mock_api(monkeypatch, "render")
     out = AgentSearchRenderTool().invoke({"url": "https://example.com"})
     assert "AGENTSEARCH_PAYMENT_ROUTE=pocket" in out
@@ -153,7 +153,7 @@ def test_e2e_against_local_mock(monkeypatch):
     s = json.loads(AgentSearchTool(mode="paid").invoke({"query": "x402"}))
     e = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
     r = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com"}))
-    assert [x["payment"]["amountAtomic"] for x in (s, e, r)] == ["8000", "4000", "10000"]
+    assert [x["payment"]["amountAtomic"] for x in (s, e, r)] == ["3000", "2000", "5000"]
     assert all(x["payment"]["settled"] for x in (s, e, r))
 
 
@@ -165,7 +165,7 @@ def test_search_and_read_is_direct_only(monkeypatch):
 
 
 def test_search_and_read_old_cap_needs_20000(monkeypatch):
-    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "8000")
+    monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "4000")
     seen = mock_api(monkeypatch, "search_and_read")
     out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
     assert "to 20000" in out and "Nothing was signed" in out
@@ -188,7 +188,7 @@ def test_news_goes_direct_with_filters(monkeypatch):
     out = json.loads(AgentSearchNewsTool().invoke({"query": "x402", "max_results": 8, "freshness": "week", "country": "us"}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/news"
     assert seen["calls"][1]["body"] == {"query": "x402", "max_results": 8, "freshness": "week", "country": "us"}
-    assert out["payment"]["amountAtomic"] == "8000" and out["payment"]["serviceId"] is None
+    assert out["payment"]["amountAtomic"] == "3000" and out["payment"]["serviceId"] is None
 
 
 def test_news_clamps_count_to_10(monkeypatch):
@@ -212,7 +212,7 @@ def test_screenshot_keeps_base64_out_of_text(monkeypatch):
                                              "args": {"url": "https://example.com", "viewport": {"width": 390, "height": 844}, "foo": 1}})
     assert seen["calls"][1]["body"] == {"url": "https://example.com", "viewport": {"width": 390, "height": 844}}
     assert "iVBORw0KGgo=" not in msg.content and "artifact" in msg.content
-    assert msg.artifact["screenshot"]["base64"] == "iVBORw0KGgo=" and msg.artifact["payment"]["amountAtomic"] == "10000"
+    assert msg.artifact["screenshot"]["base64"] == "iVBORw0KGgo=" and msg.artifact["payment"]["amountAtomic"] == "4000"
 
 
 def test_paid_search_forwards_filters_free_search_does_not_need_them(monkeypatch):

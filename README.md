@@ -5,13 +5,13 @@ LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source
 | Tool | Name | Cost |
 |---|---|---|
 | `AgentSearchTool` | `agentsearch_search` | **Free** (up to 25 searches/day per IP, up to 5 results, no key). Paid search with no daily cap is opt-in (`mode="paid"` / `AGENTSEARCH_MODE=paid`). |
-| `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.004/call (USDC on Base via x402, paid to AgentSearch) |
+| `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.002/call (USDC on Base via x402, paid to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Free trial without a wallet (3/day per IP, no screenshots), then $0.005/call (headless browser for JS pages) |
-| `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | $0.006/call with a wallet: search + the top pages' main text in one call, charged only when at least one page returns text (direct x402 only, no free tier) |
+| `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | $0.005/call with a wallet: search + the top pages' main text in one call, charged only when at least one page returns text (direct x402 only, no free tier) |
 | `AgentSearchNewsTool` | `agentsearch_news_search` | $0.005/call with a wallet: recent news articles with publish dates and sources, 1-10 per call, optional freshness/date range, country, language and domain filters (direct x402 only) |
 | `AgentSearchScreenshotTool` | `agentsearch_screenshot` | $0.005/call with a wallet: PNG/JPEG screenshot of any public page (viewport or full page, desktop or mobile viewport); the image is returned as the tool artifact (direct x402 only) |
 
-Paid prices (USDC on Base via x402, straight to AgentSearch's own API, charged only on success): search $0.005, news $0.005, extract $0.004, render $0.005, screenshot $0.005, search-and-read $0.006. Paid search, news and search-and-read accept `freshness`, `date_from`/`date_to`, `country`, `language` and `include_domains`/`exclude_domains`. Free search through the free relay stays free.
+Paid prices (USDC on Base via x402, straight to AgentSearch's own API, charged only on success): search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search-and-read $0.005. Paid search, news and search-and-read accept `freshness`, `date_from`/`date_to`, `country`, `language` and `include_domains`/`exclude_domains`. Free search through the free relay stays free.
 
 ## Install
 
@@ -82,13 +82,13 @@ agent = create_agent(
 )
 ```
 
-Without a wallet this already runs: search is free, and from 0.3.0 extract/render use a small free trial (5 extract and 3 render calls per IP per UTC day, shared daily capacity, no screenshots). Past the trial they return an `Error: ...` string with wallet setup steps (https://agentsearchhq.com/wallet-setup), so the agent answers from snippets. Set `AGENTSEARCH_FREE_TRIAL=0` to skip the trial (no request without a wallet). Add a wallet (below) and the same agent reads full pages at $0.004 per page; $1 covers about 250 calls. Pass `render_fallback=True` to extract (or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`) to retry thin pages with render automatically.
+Without a wallet this already runs: search is free, and from 0.3.0 extract/render use a small free trial (5 extract and 3 render calls per IP per UTC day, shared daily capacity, no screenshots). Past the trial they return an `Error: ...` string with wallet setup steps (https://agentsearchhq.com/wallet-setup), so the agent answers from snippets. Set `AGENTSEARCH_FREE_TRIAL=0` to skip the trial (no request without a wallet). Add a wallet (below) and the same agent reads full pages at $0.002 per page; $1 covers about 500 calls. Pass `render_fallback=True` to extract (or set `AGENTSEARCH_EXTRACT_RENDER_FALLBACK=1`) to retry thin pages with render automatically.
 
 Full walkthrough: https://agentsearchhq.com/blog/langchain-agent-search-then-read-page?utm_source=langchain-agentsearch&utm_medium=package
 
 ## Paid mode
 
-Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 using the official x402 Python SDK, by default (since 0.5.0) straight to AgentSearch's own x402 API on Base (`https://api.agentsearchhq.com`): search $0.005, extract $0.004, render $0.005, search-and-read $0.006 (search + top page text in one call, charged only when at least one page returns text), charged only on a successful answer. From 0.2.1 a wallet key alone keeps search free and only enables extract/render. Paid search (no daily cap, $0.005 per search) is opt-in: `AgentSearchTool(mode="paid")` or `AGENTSEARCH_MODE=paid`. (In 0.2.0 a key switched the default search tool to paid; `mode="free"` works in every version.)
+Install the `paid` extra and set `AGENTSEARCH_WALLET_PRIVATE_KEY` to the private key of a **new wallet made only for this**, funded with a little USDC on Base (e.g. $1; no ETH needed). Each call is paid over x402 using the official x402 Python SDK, by default (since 0.5.0) straight to AgentSearch's own x402 API on Base (`https://api.agentsearchhq.com`): search $0.003, extract $0.002, render $0.005, search-and-read $0.005 (search + top page text in one call, charged only when at least one page returns text), charged only on a successful answer. From 0.2.1 a wallet key alone keeps search free and only enables extract/render. Paid search (no daily cap, $0.005 per search) is opt-in: `AgentSearchTool(mode="paid")` or `AGENTSEARCH_MODE=paid`. (In 0.2.0 a key switched the default search tool to paid; `mode="free"` works in every version.)
 
 | Env var | Default |
 |---|---|
@@ -101,7 +101,7 @@ Limits are checked before anything is signed. The key is never logged or returne
 
 ### Paid route: direct by default since 0.5.0
 
-In 0.4.0 the direct x402 API was opt-in (`AGENTSEARCH_X402_DIRECT=1`). **From 0.5.0 it is the default**: with the `[paid]` extra and a wallet key, paid calls go straight to AgentSearch: extract **$0.004**, render **$0.005**, search **$0.005**, search-and-read **$0.006** (search is still paid only with `mode="paid"` or `AGENTSEARCH_MODE=paid`; `AgentSearchSearchAndReadTool` is always paid and direct-only). Search and render match the Pocket route at $0.005; extract is $0.004 (a little less than Pocket). Search-and-read is not on Pocket.
+In 0.4.0 the direct x402 API was opt-in (`AGENTSEARCH_X402_DIRECT=1`). **From 0.5.0 it is the default**: with the `[paid]` extra and a wallet key, paid calls go straight to AgentSearch: extract **$0.002**, render **$0.005**, search **$0.003**, search-and-read **$0.005** (search is still paid only with `mode="paid"` or `AGENTSEARCH_MODE=paid`; `AgentSearchSearchAndReadTool` is always paid and direct-only). Render matches the Pocket route at $0.005; search is $0.003 and extract is $0.002 (less than Pocket). Search-and-read is not on Pocket.
 
 ```bash
 pip install 'langchain-agentsearch[paid]'

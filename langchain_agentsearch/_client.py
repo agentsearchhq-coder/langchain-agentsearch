@@ -48,7 +48,7 @@ DIRECT_ENV_VAR = "AGENTSEARCH_X402_DIRECT"
 ROUTE_ENV_VAR = "AGENTSEARCH_PAYMENT_ROUTE"
 DEFAULT_DIRECT_URL = "https://api.agentsearchhq.com"
 DIRECT_PAYEE = "0xC49B157887e51c21CB655f39CF65D6a4c2a4C337"
-DIRECT_MAX_PER_CALL_ATOMIC = 20_000  # $0.020 hard ceiling (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009)
+DIRECT_MAX_PER_CALL_ATOMIC = 20_000  # $0.020 hard ceiling (search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005)
 # 0.7.0: optional search filters (direct only) on search, news and search_and_read.
 FILTER_KEYS = ("freshness", "date_from", "date_to", "country", "language", "include_domains", "exclude_domains")
 DIRECT_FIELDS = {"search": ("query", "max_results") + FILTER_KEYS, "news": ("query", "max_results") + FILTER_KEYS,
@@ -56,8 +56,8 @@ DIRECT_FIELDS = {"search": ("query", "max_results") + FILTER_KEYS, "news": ("que
                  "screenshot": ("url", "format", "full_page", "viewport"),
                  "search_and_read": ("query", "num_results", "max_results", "max_chars", "render_fallback") + FILTER_KEYS}
 # Tools that exist only on AgentSearch's own x402 API (not on Pocket, not on the free relay).
-DIRECT_ONLY = {"search_and_read": "$0.009 per call when at least one page returns text",
-               "news": "$0.008 per call", "screenshot": "$0.010 per call"}
+DIRECT_ONLY = {"search_and_read": "$0.005 per call when at least one page returns text",
+               "news": "$0.003 per call", "screenshot": "$0.004 per call"}
 
 
 def payment_route() -> str:
@@ -80,14 +80,14 @@ def direct_enabled() -> bool:
     return payment_route() == "direct"
 
 
-PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own API (search $0.008, extract $0.004, "
-                   "render $0.010, search_and_read $0.009, news $0.008, screenshot $0.010; $1 covers about 250 extracts or 111 search-and-read calls; failed calls are not charged), or $0.005 per call through "
+PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own API (search $0.003, extract $0.002, "
+                   "render $0.005, search_and_read $0.005, news $0.003, screenshot $0.004; $1 covers about 500 extracts or 200 search-and-read calls; failed calls are not charged), or $0.005 per call through "
                    "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only)")
 
 FREE_LIMIT_MESSAGE = (
     f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
     "You can still read pages you already found: agentsearch_extract returns a URL as clean markdown "
-    "(free trial: 5 calls/day per IP with no wallet; then $0.004 per call to AgentSearch's x402 API, $1 covers about 250 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
+    "(free trial: 5 calls/day per IP with no wallet; then $0.002 per call to AgentSearch's x402 API, $1 covers about 500 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
     "funded with a little USDC on Base and langchain-agentsearch[paid] is installed. For search with no daily cap, "
     f"also opt in with mode='paid' or AGENTSEARCH_MODE=paid. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC "
     f"(default $1.00). Setup: {GUIDE}"
@@ -112,7 +112,7 @@ def trial_limit_message(op: str, relay_message: str = "") -> str:
     reason = f" Relay said: {relay_message[:300]}" if relay_message else ""
     return (
         f"Free trial limit reached for agentsearch_{op}: {FREE_TRIAL_LIMITS[op]} {op} calls/day per IP (resets 00:00 UTC), "
-        f"subject to shared daily capacity.{reason} Continue with a wallet: {op} costs {'$0.004' if op == 'extract' else '$0.010'} per call "
+        f"subject to shared daily capacity.{reason} Continue with a wallet: {op} costs {'$0.002' if op == 'extract' else '$0.005'} per call "
         "in USDC on Base via AgentSearch's x402 API (no account, no API key; $0.005 via Pocket with AGENTSEARCH_PAYMENT_ROUTE=pocket): set AGENTSEARCH_WALLET_PRIVATE_KEY to the key of a NEW wallet funded with a little USDC on Base "
         f"and install langchain-agentsearch[paid]. Spend is capped by AGENTSEARCH_MAX_TOTAL_ATOMIC (default $1.00). "
         f"Wallet setup (about 2 minutes): {WALLET_SETUP}"
@@ -419,7 +419,7 @@ def call_portal(op: str, body: dict[str, Any], client: Optional[httpx.Client] = 
                 if direct and per_call < hard_cap and ceiling == per_call:
                     raise AgentSearchError(
                         f"{e} Your per-call cap (AGENTSEARCH_MAX_PER_CALL_ATOMIC={per_call}) is below this route's price; since 0.5.0 "
-                        "paid calls go to AgentSearch's own x402 API (search $0.008, news $0.008, extract $0.004, render $0.010, screenshot $0.010, search_and_read $0.009). Raise the cap "
+                        "paid calls go to AgentSearch's own x402 API (search $0.003, news $0.003, extract $0.002, render $0.005, screenshot $0.004, search_and_read $0.005). Raise the cap "
                         "to 20000, remove it, or set AGENTSEARCH_PAYMENT_ROUTE=pocket for the $0.005 Pocket route (search, extract and render only)."
                     ) from None
                 raise
@@ -496,7 +496,7 @@ def fallback_enabled(flag: Optional[bool]) -> bool:
 def extract_with_fallback(body: dict[str, Any], render_fallback: Optional[bool] = None,
                           client: Optional[httpx.Client] = None) -> dict[str, Any]:
     """Extract; if the result is thin (< THIN_CHARS of text) and fallback is on, render the same URL.
-    Off by default because render is a second paid call ($0.010 direct, $0.005 via Pocket) (still bounded by the session cap)."""
+    Off by default because render is a second paid call ($0.005 direct, $0.005 via Pocket) (still bounded by the session cap)."""
     out = call_portal("extract", body, client)
     if not fallback_enabled(render_fallback) or _text_len(out) >= THIN_CHARS:
         return out
