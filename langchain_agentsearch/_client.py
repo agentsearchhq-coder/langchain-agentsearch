@@ -14,6 +14,8 @@ from typing import Any, Optional
 
 import httpx
 
+from ._validate import check_query, coerce_max_results
+
 logger = logging.getLogger("langchain_agentsearch")
 
 FREE_RELAY_URL = "https://relay.agentsearchhq.com"
@@ -165,7 +167,11 @@ def _strip_provider(d: Any) -> Any:
 
 
 def free_search(query: str, max_results: Optional[int] = None, client: Optional[httpx.Client] = None) -> Any:
-    body: dict[str, Any] = {"query": query}
+    """Free relay search. Also safe to hand to a framework as a plain function: ``query`` may be a tool-input
+    dict, ``max_results`` may be an int, numeric string, tool-input dict, or an unrelated dict such as a
+    RunnableConfig (ignored). A missing/empty query raises InvalidInput before any request."""
+    body: dict[str, Any] = {"query": check_query(query)}
+    max_results = coerce_max_results(max_results)
     if max_results is not None:
         body["max_results"] = max_results
     c = client or httpx.Client(timeout=timeout_s())

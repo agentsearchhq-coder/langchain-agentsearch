@@ -3,6 +3,7 @@ so it never counts against the free relay's per-IP limits and nothing is signed.
 from __future__ import annotations
 
 import ipaddress
+from collections.abc import Mapping
 from typing import Any, Optional
 from urllib.parse import urlsplit
 
@@ -15,10 +16,52 @@ class InvalidInput(ValueError):
     """Raised for input rejected before any network call."""
 
 
+_QUERY_KEYS = ("query", "q", "input", "search_query", "text", "value")
+_COUNT_KEYS = ("max_results", "num_results", "k", "limit", "count", "value")
+
+
+def _unwrap(v: Any, keys: tuple) -> Any:
+    """Unwrap a tool-input dict ({"query": "x", "max_results": 3}) passed where a scalar was expected.
+    Returns the first matching key's value (recursively), or None when the dict has none of the keys
+    (for example a LangChain RunnableConfig passed as a 2nd positional argument)."""
+    for _ in range(4):
+        if isinstance(v, (list, tuple)):
+            v = next((x for x in v if isinstance(x, (str, int, float, dict)) and not isinstance(x, bool)), None)
+            continue
+        if isinstance(v, Mapping):
+            for k in keys:
+                if v.get(k) is not None:
+                    v = v[k]
+                    break
+            else:
+                return None
+            continue
+        return v
+    return None if isinstance(v, (Mapping, list, tuple)) else v
+
+
+def coerce_max_results(value: Any, lo: int = 1, hi: int = 5) -> Optional[int]:
+    """Never raises. None for anything unusable (the server default), otherwise an int clamped to lo..hi.
+    Accepts ints, floats, numeric strings and tool-input dicts such as {"max_results": 3}."""
+    v = _unwrap(value, _COUNT_KEYS)
+    if v is None or isinstance(v, bool) or isinstance(v, (Mapping, list, tuple)):
+        return None
+    try:
+        n = int(float(v.strip())) if isinstance(v, str) else int(v)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return max(lo, min(hi, n))
+
+
 def check_query(query: Any) -> str:
-    if query is None or not isinstance(query, str):
+    """Coerce to a non-empty search string or raise InvalidInput (nothing is sent or charged).
+    Unwraps tool-input dicts like {"query": "x"}; ints/floats are stringified."""
+    v = _unwrap(query, _QUERY_KEYS)
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        v = str(v)
+    if not isinstance(v, str):
         raise InvalidInput("query is required: pass a non-empty search string, e.g. {\"query\": \"latest LangChain release\"}. Nothing was sent or charged.")
-    q = query.strip()
+    q = v.strip()
     if not q:
         raise InvalidInput("query is empty or whitespace-only: pass a non-empty search string. Nothing was sent or charged.")
     if len(q) < MIN_QUERY_CHARS:
@@ -29,12 +72,14 @@ def check_query(query: Any) -> str:
 
 
 def check_count(value: Any, name: str, lo: int = 1, hi: int = 5) -> Optional[int]:
-    """None/empty -> None (server default). Numbers outside lo..hi are clamped."""
-    if value is None or value == "":
+    """None/empty/unusable dict -> None (server default). Tool-input dicts and numeric strings are unwrapped;
+    numbers outside lo..hi are clamped; a non-numeric string raises InvalidInput."""
+    v = _unwrap(value, _COUNT_KEYS)
+    if v is None or v == "" or isinstance(v, (bool, Mapping, list, tuple)):
         return None
     try:
-        n = int(value)
-    except (TypeError, ValueError):
+        n = int(float(v.strip())) if isinstance(v, str) else int(v)
+    except (TypeError, ValueError, OverflowError):
         raise InvalidInput(f"{name} must be a whole number from {lo} to {hi} (or omitted for the default). Nothing was sent or charged.")
     return max(lo, min(hi, n))
 
