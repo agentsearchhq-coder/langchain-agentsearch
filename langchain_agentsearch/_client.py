@@ -86,7 +86,7 @@ PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own 
                    "the Pocket Network portal with AGENTSEARCH_PAYMENT_ROUTE=pocket (search, extract and render only)")
 
 FREE_LIMIT_MESSAGE = (
-    f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
+    f"Free search allowance used up ({FREE_RELAY_DAILY_LIMIT} searches per IP in total, not per day, so it does not reset). "
     "Add a wallet key to never get blocked: fund about $1 of USDC on Base (no ETH, no account), wallet setup takes about 2 minutes: https://agentsearchhq.com/wallet-setup?utm_source=langchain-agentsearch&utm_medium=package-error . "
     "You can still read pages you already found: agentsearch_extract returns a URL as clean markdown "
     "(free trial: 5 calls/day per IP with no wallet; then $0.002 per call to AgentSearch's x402 API, $1 covers about 500 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
@@ -264,9 +264,9 @@ def search_mode_label(resolved: str) -> str:
         return ("paid: x402 to AgentSearch's API, $0.003 per search (wallet configured; "
                 "AGENTSEARCH_MODE=free keeps search free)")
     if has_wallet_key():
-        return ("free: AgentSearch free tier, up to 25 searches/day per IP (mode free, or the [paid] extra is "
+        return ("free: AgentSearch free tier, 25 searches per IP in total, then pay per call (mode free, or the [paid] extra is "
                 "missing; a wallet is configured but search does not pay)")
-    return "free: AgentSearch free tier, up to 25 searches/day per IP (no wallet configured)"
+    return "free: AgentSearch free tier, 25 searches per IP in total, then pay per call (no wallet configured)"
 
 
 def with_mode(out: Any, resolved: str) -> Any:
