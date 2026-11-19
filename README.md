@@ -1,5 +1,7 @@
 # langchain-agentsearch
 
+> **Free: 25 searches/day per IP. Add a wallet key to never get blocked.** Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (a new, dedicated wallet) and install the `[paid]` extra (`pip install "langchain-agentsearch[paid]"`): search then pays $0.003 per call with no daily cap (set `AGENTSEARCH_MODE=free` to keep search free). Fund about $1 of USDC on Base (no ETH, no account, no API key): [wallet setup, about 2 minutes](https://agentsearchhq.com/wallet-setup?utm_source=langchain-agentsearch&utm_medium=readme). Paid prices per call, USDC on Base over x402: search $0.003, news $0.003, extract $0.002, search_and_read $0.005, render $0.005, screenshot $0.004; failed calls are not charged.
+
 LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package): live web search for agents.
 
 | Tool | Name | Cost |

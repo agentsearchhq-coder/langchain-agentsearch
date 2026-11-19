@@ -87,6 +87,7 @@ PRICES_SENTENCE = ("paid per call in USDC on Base via x402 to AgentSearch's own 
 
 FREE_LIMIT_MESSAGE = (
     f"Free search limit reached (up to {FREE_RELAY_DAILY_LIMIT} searches/day per IP; resets daily). "
+    "Add a wallet key to never get blocked: fund about $1 of USDC on Base (no ETH, no account), wallet setup takes about 2 minutes: https://agentsearchhq.com/wallet-setup?utm_source=langchain-agentsearch&utm_medium=package-error . "
     "You can still read pages you already found: agentsearch_extract returns a URL as clean markdown "
     "(free trial: 5 calls/day per IP with no wallet; then $0.002 per call to AgentSearch's x402 API, $1 covers about 500 calls) once AGENTSEARCH_WALLET_PRIVATE_KEY is set to the key of a NEW wallet "
     "funded with a little USDC on Base and langchain-agentsearch[paid] is installed. With a wallet, search "
