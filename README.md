@@ -1,10 +1,12 @@
 # langchain-agentsearch
 
+> **Free: 25 searches per IP, then pay per call. Add a wallet key to never get blocked.** Set `AGENTSEARCH_WALLET_PRIVATE_KEY` (a new, dedicated wallet) and install the `[paid]` extra (`pip install "langchain-agentsearch[paid]"`): search then pays $0.003 per call with no daily cap (set `AGENTSEARCH_MODE=free` to keep search free). Fund about $1 of USDC on Base (no ETH, no account, no API key): [wallet setup, about 2 minutes](https://agentsearchhq.com/wallet-setup?utm_source=langchain-agentsearch&utm_medium=readme). Paid prices per call, USDC on Base over x402: search $0.003, news $0.003, extract $0.002, search_and_read $0.005, render $0.005, screenshot $0.004; failed calls are not charged.
+
 LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source=langchain-agentsearch&utm_medium=package): live web search for agents.
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (up to 25 searches/day per IP, up to 5 results, no key). With a wallet and the `[paid]` extra, $0.003/call with no daily cap (from 0.8.0; `mode="free"` / `AGENTSEARCH_MODE=free` keeps it free). |
+| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (25 searches per IP in total, then pay per call, up to 5 results, no key). With a wallet and the `[paid]` extra, $0.003/call with no daily cap (from 0.8.0; `mode="free"` / `AGENTSEARCH_MODE=free` keeps it free). |
 | `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.002/call (USDC on Base via x402, paid to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Free trial without a wallet (3/day per IP, no screenshots), then $0.005/call (headless browser for JS pages) |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | $0.005/call with a wallet: search + the top pages' main text in one call, charged only when at least one page returns text (direct x402 only, no free tier) |
