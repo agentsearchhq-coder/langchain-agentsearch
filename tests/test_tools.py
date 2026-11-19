@@ -19,11 +19,19 @@ def no_wallet(monkeypatch):
     monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
 
 
-def test_wallet_key_alone_keeps_search_free(monkeypatch):
-    """0.2.1: a wallet key enables extract/render but never switches search to paid on its own."""
+def test_wallet_key_makes_search_paid_unless_mode_free(monkeypatch):
+    """0.8.0: with a wallet, search pays by default; AGENTSEARCH_MODE=free (or mode="free") keeps it free."""
     monkeypatch.setenv("AGENTSEARCH_WALLET_PRIVATE_KEY", "11" * 32)
+    monkeypatch.setattr(_client, "paid_extra_installed", lambda: True)
+    assert _client.resolve_search_mode("auto") == "paid"
+    monkeypatch.setenv("AGENTSEARCH_MODE", "free")
     seen = mock(monkeypatch, 200, {"results": []})
-    AgentSearchTool().invoke({"query": "xy"})
+    out = json.loads(AgentSearchTool().invoke({"query": "xy"}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/search"
+    assert out["agentsearch_mode"].startswith("free: ")
+    monkeypatch.delenv("AGENTSEARCH_MODE")
+    seen.clear()
+    AgentSearchTool(mode="free").invoke({"query": "xy"})
     assert seen["url"] == "https://relay.agentsearchhq.com/v1/search"
 
 

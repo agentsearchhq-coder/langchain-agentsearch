@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 (2026-11-19)
+- **With a wallet, search pays by default.** In the default mode, search now pays $0.003 per call over x402 to AgentSearch's own API ($0.005 with `AGENTSEARCH_PAYMENT_ROUTE=pocket`) when a wallet is configured and the `[paid]` extra is installed. With no wallet it uses the free relay exactly as before. `AGENTSEARCH_MODE=free` (or `mode="free"`) is the opt-out. Spend caps are unchanged (per call and `AGENTSEARCH_MAX_TOTAL_ATOMIC`, default $1.00). Previously a wallet key alone kept search free.
+- **Reuse an existing wallet:** `AGENTSEARCH_WALLET_FILE` points at a file holding a 64-hex key or JSON with `privateKey` (`agentcash` = AgentCash's `~/.agentcash/wallet.json`). Read only when signing; never logged. Encrypted keystores and remote signers (CDP server wallets) are a follow-up.
+- **Mode is visible:** every search result has an `agentsearch_mode` field (`"free: ..."` / `"paid: ..."`), and the first paid search in a process logs one `AgentSearch search mode: paid ...` warning line.
+- README: paid search price in the Paid mode section fixed to $0.003 (was $0.005).
+
 ## 0.7.4 (2026-11-18)
 - Fix HTTP 400s from the free relay. `free_search()` (also what you get when you pass it to a framework as a plain function, e.g. `RunnableLambda(free_search)`) now unwraps a whole tool-input dict passed as `query`, ignores a non-count dict in the `max_results` slot (such as the RunnableConfig a framework passes as the 2nd argument), accepts a numeric string or `{"max_results": n}` for the count and clamps it to 1-5. An empty, missing or non-string query raises `InvalidInput` before any request (nothing sent or charged).
 - `check_query` / `check_count` apply the same unwrapping; `coerce_max_results` is new and never raises.

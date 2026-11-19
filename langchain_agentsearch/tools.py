@@ -123,11 +123,11 @@ __all__ = ["AgentSearchTool", "AgentSearchExtractTool", "AgentSearchRenderTool",
 
 
 class AgentSearchTool(BaseTool):
-    """Live web search. Free by default (up to 25/day per IP). Paid search (no daily cap) is opt-in:
-    mode="paid", or mode="auto" with AGENTSEARCH_MODE=paid. A wallet key alone does not make search paid."""
+    """Live web search. Free with no wallet (up to 25/day per IP). With a wallet configured (and the [paid] extra),
+    the default mode="auto" pays $0.003 per search (no daily cap); mode="free" or AGENTSEARCH_MODE=free keeps it free."""
 
     name: str = "agentsearch_search"
-    description: str = "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. Free by default (no key); paid mode is $0.003 per search and also honors freshness/date range, country, language and include/exclude domain filters. For recent news use agentsearch_news_search."
+    description: str = "Live web search. Returns up to 5 ranked results (title, url, content). Use for current facts or finding URLs. Free with no wallet (no key); with a wallet it is $0.003 per search (the result's agentsearch_mode says which) and also honors freshness/date range, country, language and include/exclude domain filters. For recent news use agentsearch_news_search."
     args_schema: Type[BaseModel] = SearchInput
     mode: Literal["auto", "free", "paid"] = "auto"
     handle_validation_error: Any = _on_validation_error
@@ -140,8 +140,8 @@ class AgentSearchTool(BaseTool):
                 body: dict[str, Any] = {"query": query, **_filters(kw)}
                 if max_results:
                     body["max_results"] = max_results
-                return c.dumps(c.call_portal("search", body))
-            return c.dumps(c.free_search(query, max_results))
+                return c.dumps(c.with_mode(c.call_portal("search", body), "paid"))
+            return c.dumps(c.with_mode(c.free_search(query, max_results), "free"))
         except Exception as e:
             return _err(e)
 
@@ -192,7 +192,7 @@ class AgentSearchSearchAndReadTool(BaseTool):
     description: str = (
         "Search the live web and return the top results with each page's main text in one paid call ($0.005 USDC on Base, charged only when at least one page returns text). "
         "Cheaper than a $0.003 search plus three $0.002 extracts ($0.009) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). "
-        "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket or the free relay. Search itself stays free by default."
+        "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket or the free relay. Plain search is free without a wallet."
     )
     args_schema: Type[BaseModel] = SearchAndReadInput
     handle_validation_error: Any = _on_validation_error
