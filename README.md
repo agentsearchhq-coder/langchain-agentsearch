@@ -4,7 +4,7 @@ LangChain (Python) tools for [AgentSearch](https://agentsearchhq.com/?utm_source
 
 | Tool | Name | Cost |
 |---|---|---|
-| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (up to 25 searches/day per IP, up to 5 results, no key). With a wallet and the `[paid]` extra, $0.003/call with no daily cap (from 0.8.0; `mode="free"` / `AGENTSEARCH_MODE=free` keeps it free). |
+| `AgentSearchTool` | `agentsearch_search` | **Free** with no wallet (25 free searches per IP in total, then pay per call, up to 5 results, no key). With a wallet and the `[paid]` extra, $0.003/call with no daily cap (from 0.8.0; `mode="free"` / `AGENTSEARCH_MODE=free` keeps it free). |
 | `AgentSearchExtractTool` | `agentsearch_extract` | Free trial without a wallet (5/day per IP), then $0.002/call (USDC on Base via x402, paid to AgentSearch) |
 | `AgentSearchRenderTool` | `agentsearch_render` | Free trial without a wallet (3/day per IP, no screenshots), then $0.005/call (headless browser for JS pages) |
 | `AgentSearchSearchAndReadTool` | `agentsearch_search_and_read` | $0.005/call with a wallet: search + the top pages' main text in one call, charged only when at least one page returns text (direct x402 only, no free tier) |
@@ -118,9 +118,9 @@ Signs only the `exact` scheme, USDC on Base, to AgentSearch's payee `0xC49B15788
 
 ## Errors and input checks
 
-Tools return `"Error: ..."` strings rather than raising. A 429 from the free relay means the daily limit was hit; the message explains how to upgrade.
+Tools return `"Error: ..."` strings rather than raising. A 429 from the free relay means the free search allowance (25 free searches per IP in total) is used up or shared daily capacity is reached; the message explains how to upgrade.
 
-From 0.6.1 inputs are checked before any request is sent (so bad input never counts against your free daily limit and nothing is signed): an empty or whitespace-only `query`, a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), or a non-numeric result count returns an `Error: ...` string. `max_results: null` means the default, out-of-range counts are clamped to 1-5, and common argument names from LLMs are accepted (`q`/`input` for `query`, `num_results`/`k` for `max_results`, `link` for `url`).
+From 0.6.1 inputs are checked before any request is sent (so bad input never counts against your free search allowance and nothing is signed): an empty or whitespace-only `query`, a URL that isn't a full public `http(s)` URL (no credentials, no localhost/private IPs/single-label hosts), or a non-numeric result count returns an `Error: ...` string. `max_results: null` means the default, out-of-range counts are clamped to 1-5, and common argument names from LLMs are accepted (`q`/`input` for `query`, `num_results`/`k` for `max_results`, `link` for `url`).
 
 ## Development
 

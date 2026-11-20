@@ -123,7 +123,7 @@ __all__ = ["AgentSearchTool", "AgentSearchExtractTool", "AgentSearchRenderTool",
 
 
 class AgentSearchTool(BaseTool):
-    """Live web search. Free with no wallet (up to 25/day per IP). With a wallet configured (and the [paid] extra),
+    """Live web search. Free with no wallet (25 free searches per IP in total, then pay per call). With a wallet configured (and the [paid] extra),
     the default mode="auto" pays $0.003 per search (no daily cap); mode="free" or AGENTSEARCH_MODE=free keeps it free."""
 
     name: str = "agentsearch_search"
