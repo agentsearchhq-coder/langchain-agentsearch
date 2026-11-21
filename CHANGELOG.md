@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.2 (2026-11-21)
+
+- News, Search + Read and Screenshot now use the free relay by default, matching a free-first setup: **10 free calls per IP in total each** (lifetime, they do not reset), then pay per call. A wallet key alone does not make them paid; set `AGENTSEARCH_MODE=paid` (or `mode="paid"`) to pay ($0.003 / $0.005 / $0.004 on the direct x402 API). After the free allowance a 429 explains how to upgrade. Extract stays 5/day and render 3/day.
+- They are still not available on the Pocket route. Requests keep the `X-Agent-Client: langchain-agentsearch/<version>` tag.
+
+
 ## 0.8.1 (2026-11-20)
 - Free search wording: the free relay now allows **25 free searches per IP in total** (a lifetime allowance since 2026-11-19, not per day), then pay per call via x402 on Base ($0.003 per search at https://api.agentsearchhq.com; wallet setup https://agentsearchhq.com/wallet-setup). The search tool docstring/description, the free-limit (HTTP 429) message, `search_mode_label()` and the README no longer say "25 searches/day per IP", "resets daily" or "daily limit". The extract/render free trial is unchanged (5 extract and 3 render calls per day per IP). No behavior change.
 

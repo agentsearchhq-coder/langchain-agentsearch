@@ -125,7 +125,7 @@ def test_search_and_read_validates_before_signing(net, monkeypatch):
     monkeypatch.setattr(_client, "call_portal", lambda op, body, client=None: called.append(body) or {"ok": True})
     assert AgentSearchSearchAndReadTool().invoke({"query": "  "}).startswith("Error: ")
     assert called == [] and net == []
-    AgentSearchSearchAndReadTool().invoke({"q": "xy", "max_results": 9})
+    AgentSearchSearchAndReadTool(mode="paid").invoke({"q": "xy", "max_results": 9})
     assert called == [{"query": "xy", "num_results": 5}]
 
 
