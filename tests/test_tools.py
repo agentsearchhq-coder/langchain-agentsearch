@@ -4,8 +4,11 @@ import os
 import httpx
 import pytest
 
-from langchain_agentsearch import AgentSearchExtractTool, AgentSearchRenderTool, AgentSearchSearchAndReadTool, AgentSearchTool, FREE_LIMIT_MESSAGE
+from langchain_agentsearch import (AgentSearchExtractTool, AgentSearchNewsTool, AgentSearchRenderTool, AgentSearchScreenshotTool,
+                                   AgentSearchSearchAndReadTool, AgentSearchTool, FREE_LIMIT_MESSAGE)
 from langchain_agentsearch import _client
+
+_REAL_CLIENT = httpx.Client
 
 
 @pytest.fixture(autouse=True)
@@ -59,8 +62,7 @@ def mock(monkeypatch, status, body):
         seen["body"] = json.loads(req.content)
         return httpx.Response(status, json=body)
 
-    real = httpx.Client
-    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: _REAL_CLIENT(transport=httpx.MockTransport(handler)))
     return seen
 
 
@@ -135,8 +137,7 @@ def test_paid_flow_signs_with_x402_sdk(monkeypatch):
             return httpx.Response(402, headers={"PAYMENT-REQUIRED": encode_payment_required_header(req)}, json={})
         return httpx.Response(200, json={"portal": {}, "data": {"url": "https://example.com", "content": "hi"}})
 
-    real = httpx.Client
-    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: _REAL_CLIENT(transport=httpx.MockTransport(handler)))
     out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
     assert out["content"] == "hi" and out["payment"]["amountAtomic"] == "5000"
     assert len(calls) == 2 and _client.session_spent_atomic() == 5000
@@ -189,8 +190,7 @@ def test_trial_fallback_uses_render_trial(monkeypatch):
             return httpx.Response(200, json={"markdown": "thin"})
         return httpx.Response(200, json={"markdown": "z" * 500})
 
-    real = httpx.Client
-    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: real(transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: _REAL_CLIENT(transport=httpx.MockTransport(handler)))
     out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com", "render_fallback": True}))
     assert urls == ["https://relay.agentsearchhq.com/v1/extract", "https://relay.agentsearchhq.com/v1/render"]
     assert out["render_fallback"]["used"] is True
@@ -208,3 +208,39 @@ def test_free_limit_message_lifetime_wording():
     assert "25 free searches per IP in total, then pay per call" in msg
     assert "searches/day" not in msg and "resets daily" not in msg
     assert "per IP in total" in _client.search_mode_label("free")
+
+
+def test_free_news_sar_screenshot_mocked(monkeypatch):
+    seen = mock(monkeypatch, 200, {"provider": "p", "query": "xy", "results": [{"title": "T", "url": "https://a"}]})
+    out = json.loads(AgentSearchNewsTool().invoke({"query": "xy", "max_results": 3, "freshness": "week"}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/news"
+    assert seen["body"] == {"query": "xy", "max_results": 3}  # filters dropped on the free path
+    assert "provider" not in out and out["results"][0]["title"] == "T"
+
+    seen = mock(monkeypatch, 200, {"query": "xy", "extracted_count": 1, "results": [{"title": "T"}]})
+    out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "xy", "num_results": 1}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/search_and_read"
+    assert seen["body"] == {"query": "xy", "num_results": 1}
+
+    seen = mock(monkeypatch, 200, {"url": "https://example.com/", "screenshot": {"format": "png", "width": 10, "height": 10, "base64": "iVBO"}})
+    text, art = AgentSearchScreenshotTool()._run(url="https://example.com")
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/screenshot"
+    assert "iVBO" not in text
+    assert art["screenshot"]["base64"] == "iVBO"
+
+
+def test_life_tool_429(monkeypatch):
+    mock(monkeypatch, 429, {})
+    out = AgentSearchNewsTool().invoke({"query": "xy"})
+    assert "10 free news" in out
+    assert out.startswith("Error:")
+
+
+def test_life_tool_wallet_default_stays_free(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_WALLET_PRIVATE_KEY", "11" * 32)
+    seen = mock(monkeypatch, 200, {"results": []})
+    AgentSearchNewsTool().invoke({"query": "xy"})
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/news"
+    mock(monkeypatch, 429, {})
+    out = AgentSearchNewsTool().invoke({"query": "xy"})
+    assert "AGENTSEARCH_MODE=paid" in out

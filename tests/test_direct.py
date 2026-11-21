@@ -106,7 +106,7 @@ def test_direct_signs_for_agentsearch_payee(monkeypatch, op):
     elif op == "extract":
         out = json.loads(AgentSearchExtractTool().invoke({"url": "https://example.com"}))
     elif op == "search_and_read":
-        out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "qq", "num_results": 3}))
+        out = json.loads(AgentSearchSearchAndReadTool(mode="paid").invoke({"query": "qq", "num_results": 3}))
     else:
         out = json.loads(AgentSearchRenderTool().invoke({"url": "https://example.com", "formats": ["markdown"]}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/{op}"
@@ -159,12 +159,14 @@ def test_e2e_against_local_mock(monkeypatch):
 
 def test_search_and_read_is_direct_only(monkeypatch):
     monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
     out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
     assert "own x402 API" in out and "Nothing was signed" in out and "Pocket" in out
 
 
 def test_search_and_read_old_cap_needs_20000(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     monkeypatch.setenv("AGENTSEARCH_MAX_PER_CALL_ATOMIC", "4000")
     seen = mock_api(monkeypatch, "search_and_read")
     out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
@@ -172,18 +174,27 @@ def test_search_and_read_old_cap_needs_20000(monkeypatch):
     assert all(c["sig"] is None for c in seen["calls"])
 
 
-def test_search_and_read_no_key_is_not_on_free_relay(monkeypatch):
+def test_search_and_read_no_key_uses_the_free_relay(monkeypatch):
     for k in _client.KEY_ENV_VARS:
         monkeypatch.delenv(k, raising=False)
-    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
-    out = AgentSearchSearchAndReadTool().invoke({"query": "qq"})
-    assert "No wallet is configured" in out or "no wallet" in out.lower()
-    assert "Nothing was signed" in out or "no call was made" in out.lower()
+    seen = {"url": None, "body": None}
+
+    def handler(req):
+        seen["url"] = str(req.url)
+        seen["body"] = json.loads(req.content)
+        return httpx.Response(200, json={"query": "qq", "results": []})
+
+    monkeypatch.setattr(_client.httpx, "Client", lambda **kw: _REAL_CLIENT(transport=httpx.MockTransport(handler)))
+    out = json.loads(AgentSearchSearchAndReadTool().invoke({"query": "qq"}))
+    assert seen["url"] == "https://relay.agentsearchhq.com/v1/search_and_read"
+    assert seen["body"] == {"query": "qq"}
+    assert out["results"] == []
 
 
 # 0.7.0: news search, screenshot, filters, extract max_chars/include_links
 
 def test_news_goes_direct_with_filters(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     seen = mock_api(monkeypatch, "news")
     out = json.loads(AgentSearchNewsTool().invoke({"query": "x402", "max_results": 8, "freshness": "week", "country": "us"}))
     assert seen["calls"][0]["url"] == f"{API}/x402/v1/news"
@@ -192,6 +203,7 @@ def test_news_goes_direct_with_filters(monkeypatch):
 
 
 def test_news_clamps_count_to_10(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     seen = mock_api(monkeypatch, "news")
     AgentSearchNewsTool().invoke({"query": "xy", "max_results": 50})
     assert seen["calls"][1]["body"]["max_results"] == 10
@@ -200,12 +212,16 @@ def test_news_clamps_count_to_10(monkeypatch):
 @pytest.mark.parametrize("tool,args", [(AgentSearchNewsTool, {"query": "qq"}), (AgentSearchScreenshotTool, {"url": "https://example.com"})])
 def test_news_and_screenshot_are_direct_only(monkeypatch, tool, args):
     monkeypatch.setenv("AGENTSEARCH_PAYMENT_ROUTE", "pocket")
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     monkeypatch.setattr(_client.httpx, "Client", lambda **kw: pytest.fail("no network call expected"))
     out = tool().invoke(args)
-    assert "own x402 API" in out and "Nothing was signed" in out
+    # screenshot returns (error, None)
+    text = out[0] if isinstance(out, tuple) else out
+    assert "own x402 API" in text and "Nothing was signed" in text
 
 
 def test_screenshot_keeps_base64_out_of_text(monkeypatch):
+    monkeypatch.setenv("AGENTSEARCH_MODE", "paid")
     shot = {"format": "png", "width": 390, "height": 844, "bytes": 12, "base64": "iVBORw0KGgo="}
     seen = mock_api(monkeypatch, "screenshot", resp={"url": "https://example.com/", "screenshot": shot})
     msg = AgentSearchScreenshotTool().invoke({"type": "tool_call", "id": "t1", "name": "agentsearch_screenshot",

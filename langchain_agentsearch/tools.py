@@ -186,15 +186,17 @@ class AgentSearchRenderTool(_PaidTool):
 
 
 class AgentSearchSearchAndReadTool(BaseTool):
-    """Search the live web and read the top pages in one paid call on AgentSearch's direct x402 API ($0.005 when at least one page returns text). Direct only — not on Pocket, not on the free relay."""
+    """Search the live web and read the top pages. Free by default (10 calls per IP in total on the relay). With AGENTSEARCH_MODE=paid, $0.005 on the direct x402 API when at least one page returns text. Not on Pocket."""
 
     name: str = "agentsearch_search_and_read"
     description: str = (
-        "Search the live web and return the top results with each page's main text in one paid call ($0.005 USDC on Base, charged only when at least one page returns text). "
+        "Search the live web and return the top results with each page's main text in one call. Free by default (10 calls per IP in total, then pay per call). "
+        "With AGENTSEARCH_MODE=paid (and a wallet): $0.005 USDC on Base, charged only when at least one page returns text. "
         "Cheaper than a $0.003 search plus three $0.002 extracts ($0.009) and one payment instead of four. Default 3 results (max 5), default 8000 characters per page (max 20000). "
-        "Pass render_fallback=true to render at most one thin page in the same call. Direct x402 only — not available on Pocket or the free relay. Plain search is free without a wallet."
+        "Pass render_fallback=true to render at most one thin page in the same call. Paid path is direct x402 only (not on Pocket)."
     )
     args_schema: Type[BaseModel] = SearchAndReadInput
+    mode: Literal["auto", "free", "paid"] = "auto"
     handle_validation_error: Any = _on_validation_error
 
     def _run(self, query: str = "", num_results: Optional[int] = None, max_chars: Optional[int] = None,
@@ -209,22 +211,25 @@ class AgentSearchSearchAndReadTool(BaseTool):
                 body["max_chars"] = max_chars
             if render_fallback is not None:
                 body["render_fallback"] = render_fallback
-            return c.dumps(c.call_portal("search_and_read", body))
+            if c.resolve_life_tool_mode(self.mode) == "paid":
+                return c.dumps(c.call_portal("search_and_read", body))
+            return c.dumps(c.with_mode(c.free_life_tool("search_and_read", body), "free"))
         except Exception as e:
             return _err(e)
 
 
 class AgentSearchNewsTool(BaseTool):
-    """Recent news articles in one paid call on AgentSearch's direct x402 API ($0.003; no results, no charge). Direct only."""
+    """Recent news articles. Free by default (10 calls per IP in total on the relay). With AGENTSEARCH_MODE=paid, $0.003 on the direct x402 API (no results, no charge). Not on Pocket."""
 
     name: str = "agentsearch_news_search"
     description: str = (
         "Search recent news articles and return title, URL, snippet, source domain and publish date for each (1-10, default 5). "
         "Use for current events, company or product news, and anything where recency matters; optional freshness (day/week/month/year) "
-        "or date_from/date_to, country, language, include/exclude domains. To read an article in full, pass its URL to agentsearch_extract. "
-        "Paid: $0.003 per call (USDC on Base via x402 to AgentSearch's own API; calls with no results are not charged). Needs a wallet; not on Pocket or the free relay."
+        "or date_from/date_to, country, language, include/exclude domains (filters apply on the paid route). To read an article in full, pass its URL to agentsearch_extract. "
+        "Free by default (10 calls per IP in total, then pay per call). With AGENTSEARCH_MODE=paid (and a wallet): $0.003 per call (USDC on Base via x402 to AgentSearch's own API; calls with no results are not charged). Paid path is not on Pocket."
     )
     args_schema: Type[BaseModel] = NewsInput
+    mode: Literal["auto", "free", "paid"] = "auto"
     handle_validation_error: Any = _on_validation_error
 
     def _run(self, query: str = "", max_results: Optional[int] = None, run_manager: Any = None, **kw: Any) -> str:
@@ -234,13 +239,15 @@ class AgentSearchNewsTool(BaseTool):
             body: dict[str, Any] = {"query": query, **_filters(kw)}
             if max_results is not None:
                 body["max_results"] = max_results
-            return c.dumps(c.call_portal("news", body))
+            if c.resolve_life_tool_mode(self.mode) == "paid":
+                return c.dumps(c.call_portal("news", body))
+            return c.dumps(c.with_mode(c.free_life_tool("news", body), "free"))
         except Exception as e:
             return _err(e)
 
 
 class AgentSearchScreenshotTool(BaseTool):
-    """Website screenshot in one paid call on AgentSearch's direct x402 API ($0.004). Direct only.
+    """Website screenshot. Free by default (10 calls per IP in total on the relay). With AGENTSEARCH_MODE=paid, $0.004 on the direct x402 API. Not on Pocket.
 
     Returns (content, artifact): the content string the model sees has the image metadata but not the base64
     bytes (to save tokens); the artifact is the full result including ``screenshot.base64``."""
@@ -250,10 +257,12 @@ class AgentSearchScreenshotTool(BaseTool):
         "Load a public URL in a real headless browser and capture a PNG or JPEG screenshot of the viewport or the full page "
         "(up to 4000 px tall), plus title, final URL and HTTP status. Use for visual checks, layout or UI questions, and pages "
         "where the look matters; for page text use agentsearch_extract. Set viewport (e.g. 390x844) for mobile. "
-        "Paid: $0.004 per call (USDC on Base via x402 to AgentSearch's own API). Needs a wallet; not on Pocket or the free relay. "
+        "Free by default (10 calls per IP in total, then pay per call). With AGENTSEARCH_MODE=paid (and a wallet): $0.004 per call "
+        "(USDC on Base via x402 to AgentSearch's own API). Paid path is not on Pocket. "
         "The image bytes go to the tool artifact, not into this text."
     )
     args_schema: Type[BaseModel] = ScreenshotInput
+    mode: Literal["auto", "free", "paid"] = "auto"
     response_format: Literal["content", "content_and_artifact"] = "content_and_artifact"
     handle_validation_error: Any = _on_validation_error
 
@@ -267,7 +276,10 @@ class AgentSearchScreenshotTool(BaseTool):
                 body["full_page"] = full_page
             if viewport is not None:
                 body["viewport"] = viewport.model_dump() if hasattr(viewport, "model_dump") else dict(viewport)
-            out = c.call_portal("screenshot", body)
+            if c.resolve_life_tool_mode(self.mode) == "paid":
+                out = c.call_portal("screenshot", body)
+            else:
+                out = c.with_mode(c.free_life_tool("screenshot", body), "free")
         except Exception as e:
             return _err(e), None
         shown = dict(out)
